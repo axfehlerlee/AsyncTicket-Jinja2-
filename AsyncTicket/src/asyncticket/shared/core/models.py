@@ -9,3 +9,6 @@ def init_models():
     """SQLAlchemy 모델 메타데이터 등록"""
     # 모델을 불러와야 공통 Base가 좌석 테이블 정의를 인식한다.
     import asyncticket.seats.infrastructure.models
+    import asyncticket.payment.infrastructure.models
+    import asyncticket.reservations.infrastructure.models
+    import asyncticket.users.infrastructure.models
