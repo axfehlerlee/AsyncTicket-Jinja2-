@@ -98,7 +98,7 @@ class ReservationItem(Base):
 
     # FK (seats_info.seat_id)
     seat_id2: Mapped[int] = mapped_column(
-        ForeignKey("seat_info.seat_id"),
+        ForeignKey("seats_info.seat_id"),
         nullable=False,
         index=True
     )
