@@ -7,7 +7,7 @@ from asyncticket.venues.application.service import VenueService
 
 router = APIRouter(prefix="/v1/venues", tags=["Venues"])
 
-
+# TODO : APIResponse 추가시 반환 타입 변경하기
 @router.get("", status_code=status.HTTP_200_OK,summary="공연장 단건 조회", description="venues_id로 공연장 단건 조회")
 async def get_venue(venues_id: int, venue_service: Annotated[VenueService, Depends(provider_venue_service)]):
     result = await venue_service.get_venue(venues_id)
