@@ -148,3 +148,4 @@ class ValidationException(SharedException[dict[str, list[str]]]):
             error_code=error_code,
             errors=field_errors or {},
         )
+# pyright: ignore[reportReturnType]
