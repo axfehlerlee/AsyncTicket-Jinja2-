@@ -17,39 +17,40 @@
 
 """
 
-from datetime import datetime
+# 
+# from datetime import datetime
 
 
-# (요구사항1) 예매 상태
-CONFIRMED = "CONFIRMED"
-CANCELED = "CANCELED"
+# # (요구사항1) 예매 상태
+# CONFIRMED = "CONFIRMED"
+# CANCELED = "CANCELED"
 
-# 정의된 요구사항을 클래스에 정의
+# # 정의된 요구사항을 클래스에 정의
 
-# 예매가 가진값들
-class Reservation:
-    def __init__(self, 
-                reserv_id: int, 
-                user_id: int, 
-                perf_id: int, 
-                total_amount: int, 
-                status: str):
+# # 예매가 가진값들
+# class Reservation:
+#     def __init__(self, 
+#                 reserv_id: int, 
+#                 user_id: int, 
+#                 perf_id: int, 
+#                 total_amount: int, 
+#                 status: str):
         
-        self.id = reserv_id
-        self.user_id = user_id
-        self.perf_id = perf_id
-        self.quantity = 1 # 1인 예매 1좌석 한정
-        self.total_amount = total_amount
-        self.status = status
-        self.created_at = None #datetime.now()
-        self.confirmed_at = None
-        self.canceled_at = None
+#         self.id = reserv_id
+#         self.user_id = user_id
+#         self.perf_id = perf_id
+#         self.quantity = 1 # 1인 예매 1좌석 한정
+#         self.total_amount = total_amount
+#         self.status = status
+#         self.created_at = None #datetime.now()
+#         self.confirmed_at = None
+#         self.canceled_at = None
 
 
-    @classmethod
-    # 예매 생성 규칙
-    def create(self, reserv_id: int, user_id: int, perf_id: int, )
+    # @classmethod
+    # # 예매 생성 규칙
+    # def create(self, reserv_id: int, user_id: int, perf_id: int, ):
+    #     NotImplementedError
 
-
-    # 예매 취소 규칙
+    # # 예매 취소 규칙
     
