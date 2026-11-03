@@ -24,8 +24,8 @@ async def lifespan(app: FastAPI):
     # 모든 models.py를 import → Base.metadata에 테이블 정보 등록
     init_models()
 
-    # async with engine.begin() as conn:
-    #     await conn.run_sync(Base.metadata.create_all)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
     logger.info("애플리케이션 준비 완료")
     # ───────── 여기서 멈춰서 서버가 요청을 처리 ─────────

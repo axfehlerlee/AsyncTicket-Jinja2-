@@ -30,17 +30,12 @@ class Reservation(Base):
         index=True
     )
 
-    # 임의로 컬럼만 둔것! -> 나중에 공연 model이 생기면 코드 수정필요!
+    # FK (performances.perf_id)
     perf_id: Mapped[int] = mapped_column(
-        BigInteger,
-        nullable=False
+        ForeignKey("performances.perf_id"),
+        nullable=False,
+        index=True
     )
-    # # 관계설정 필요 (performances.perf_id)
-    # perf_id: Mapped[int] = mapped_column(
-    #     ForeignKey("performances.perf_id"),
-    #     nullable=False
-    #     index=True
-    # )
 
     quantity: Mapped[int] = mapped_column(
         Integer,
