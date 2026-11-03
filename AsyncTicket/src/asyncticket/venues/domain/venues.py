@@ -4,7 +4,7 @@ class Venues:
     """
 
     def __init__(self, id:int, name:str, address:str, address_detail:str, post_no:str):
-        if name:
+        if not name:
             raise ValueError("이름은 비어있을 수 없습니다.")
 
         self.id = id
