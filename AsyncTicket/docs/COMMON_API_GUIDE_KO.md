@@ -60,3 +60,13 @@ uv run --with httpx python -B -m unittest discover -s tests/shared_core -v
 ## 관련 작업
 
 좌석 API의 공통 응답 적용은 후속 PR에서 제공한다. 이 PR은 공통 모듈의 독립 검사만 포함한다.
+
+
+## DB 세션 종료 시 저장 확정
+
+get_db는 yield 이후 정상적으로 돌아오면 commit하고, 요청 처리 또는 commit에서
+예외가 발생하면 rollback한 뒤 예외를 다시 전달한다. 연결 설정·풀 옵션은 유지한다.
+기존 서비스가 먼저 commit한 내용까지 나중 rollback으로 취소할 수 있는 것은 아니다.
+요청 전체의 원자성과 저장 확정 책임을 통일하는 작업은 별도 통합 검토가 필요하다.
+의존성 정리 시점과 실제 HTTP 응답 전송 시점도 별도이며, 이 단위 검사는 HTTP 전송
+이전에 commit이 끝나는 것을 보장하지 않는다.
