@@ -41,6 +41,7 @@ class CatalogPolicy:
     admin_can_manage_all: bool = True
     show_types: frozenset[str] | None = None
     performance_statuses: frozenset[str] | None = None
+    # 연결 회차의 일정·회차번호·매수 변경 제한이다. 상태만 바꾸는 요청은 허용한다.
     block_performance_changes_with_links: bool = True
 
     def authorize(self, actor: CatalogActor, owner_id: int | None = None) -> None:

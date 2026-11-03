@@ -246,6 +246,17 @@ class CatalogApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(status, 200)
         self.assertEqual([item["perf_id"] for item in body["items"]], [11, 12])
 
+    async def test_date_filter_validates_both_utc_conversion_boundaries(self) -> None:
+        for value in ("0001-01-01", "9999-12-31"):
+            with self.subTest(date=value):
+                status, _ = await asgi_get(self.app, f"/v1/shows/1/performances?date={value}")
+                self.assertEqual(status, 422)
+        for value in ("0001-01-02", "9999-12-30"):
+            with self.subTest(date=value):
+                status, result = await asgi_get(self.app, f"/v1/shows/1/performances?date={value}")
+                self.assertEqual(status, 200)
+                self.assertEqual(result, {"items": []})
+
     async def test_performance_list_scopes_to_parent(self) -> None:
         status, body = await asgi_get(self.app, "/v1/shows/2/performances")
         self.assertEqual(status, 200)
@@ -490,10 +501,58 @@ class CatalogApiTests(unittest.IsolatedAsyncioTestCase):
     async def test_linked_seats_block_performance_changes_and_deletion(self) -> None:
         self.session.execute(self.metadata.tables["seats_info"].insert().values(seat_id=1, perf_id=11))
         self.session.commit()
-        for method, body in (("PATCH", {"status": "CANCELED"}), ("DELETE", None)):
+        before = (await asgi_get(self.app, "/v1/performances/11"))[1]
+        time_changes = [
+            {field: (datetime.fromisoformat(before[field]) + timedelta(minutes=5)).isoformat()}
+            for field in ("starts_at", "ends_at", "booking_opens_at", "booking_closes_at")
+        ]
+        for method, body in [
+            *(("PATCH", change) for change in time_changes),
+            ("PATCH", {"round_number": 99}), ("PATCH", {"max_tickets_per_user": 2}),
+            ("DELETE", None),
+        ]:
             status, _, result = await asgi_request(self.app, method, "/v1/performances/11", body, "seller")
             self.assertEqual(status, 409, result)
+            self.assertEqual((await asgi_get(self.app, "/v1/performances/11"))[1], before)
         self.assertEqual(self.session.scalar(select(func.count()).select_from(self.metadata.tables["seats_info"])), 1)
+
+    async def test_linked_seats_allow_status_only_sale_start_and_close(self) -> None:
+        self.session.execute(self.metadata.tables["seats_info"].insert().values(seat_id=1, perf_id=11))
+        self.session.commit()
+        before = (await asgi_get(self.app, "/v1/performances/11"))[1]
+        # These are fixture values, not a decision about the team's status enum.
+        for next_status in ("ON_SALE", "CLOSED"):
+            status, _, result = await asgi_request(
+                self.app, "PATCH", "/v1/performances/11", {"status": next_status}, "seller",
+            )
+            self.assertEqual(status, 200, result)
+            self.assertEqual(result, {**before, "status": next_status})
+            self.assertEqual((await asgi_get(self.app, "/v1/performances/11"))[1], result)
+        self.assertEqual(self.session.scalar(select(func.count()).select_from(self.metadata.tables["seats_info"])), 1)
+
+    async def test_linked_reservations_allow_status_only_without_altering_links(self) -> None:
+        self.session.execute(self.metadata.tables["seats_info"].insert().values(seat_id=1, perf_id=11))
+        self.session.execute(self.metadata.tables["reservations"].insert().values(reserv_id=1, perf_id=11))
+        self.session.commit()
+        before = (await asgi_get(self.app, "/v1/performances/11"))[1]
+        status, _, result = await asgi_request(
+            self.app, "PATCH", "/v1/performances/11", {"status": "CLOSED"}, "seller",
+        )
+        self.assertEqual(status, 200, result)
+        self.assertEqual(result, {**before, "status": "CLOSED"})
+        for table_name in ("seats_info", "reservations"):
+            self.assertEqual(self.session.scalar(select(func.count()).select_from(self.metadata.tables[table_name])), 1)
+
+    async def test_linked_status_and_detail_patch_is_atomic_on_conflict(self) -> None:
+        self.session.execute(self.metadata.tables["seats_info"].insert().values(seat_id=1, perf_id=11))
+        self.session.commit()
+        before = (await asgi_get(self.app, "/v1/performances/11"))[1]
+        status, _, result = await asgi_request(
+            self.app, "PATCH", "/v1/performances/11",
+            {"status": "ON_SALE", "max_tickets_per_user": 2}, "seller",
+        )
+        self.assertEqual(status, 409, result)
+        self.assertEqual((await asgi_get(self.app, "/v1/performances/11"))[1], before)
 
     async def test_linked_reservations_block_performance_changes_and_deletion(self) -> None:
         self.session.execute(self.metadata.tables["reservations"].insert().values(reserv_id=1, perf_id=11))
@@ -521,6 +580,13 @@ class CatalogApiTests(unittest.IsolatedAsyncioTestCase):
         self.performances._policy = CatalogPolicy(performance_statuses=frozenset({"SCHEDULED"}))
         status, _, result = await asgi_request(self.app, "POST", "/v1/shows/2/performances", self.performance_body(status="UNCONFIRMED"), "seller")
         self.assertEqual(status, 422, result)
+        self.session.execute(self.metadata.tables["seats_info"].insert().values(seat_id=1, perf_id=11))
+        self.session.commit()
+        status, _, result = await asgi_request(
+            self.app, "PATCH", "/v1/performances/11", {"status": "UNCONFIRMED"}, "seller",
+        )
+        self.assertEqual(status, 422, result)
+        self.assertEqual((await asgi_get(self.app, "/v1/performances/11"))[1]["status"], "SCHEDULED")
 
 
 if __name__ == "__main__":

@@ -7,11 +7,15 @@ from asyncticket.performances.domain.performance import Performance, Performance
 from asyncticket.performances.domain.repositories import PerformanceRepository
 from asyncticket.shared.domain.catalog import (
     CatalogActor, CatalogConflictError, CatalogPolicy, CatalogRelations, CatalogUnitOfWork,
+    CatalogValidationError,
 )
 from asyncticket.shared.domain.catalog_validation import validate_performance
 from asyncticket.shows.application.service import ShowApplicationService
 
 KST = timezone(timedelta(hours=9), name="Asia/Seoul")
+# KST 자정의 UTC 변환과 다음 날짜 경계 조회에 안전한 범위를 함께 사용한다.
+PERFORMANCE_DATE_MIN = date.min + timedelta(days=1)
+PERFORMANCE_DATE_MAX = date.max - timedelta(days=1)
 
 
 class PerformanceApplicationService:
@@ -35,6 +39,9 @@ class PerformanceApplicationService:
         await self._show_service.find_by_id(show_id)
         starts_from = starts_until = None
         if on_date is not None:
+            # 라우터 외의 호출도 Python datetime 범위를 벗어나지 않게 검사한다.
+            if not PERFORMANCE_DATE_MIN <= on_date <= PERFORMANCE_DATE_MAX:
+                raise CatalogValidationError("조회 날짜는 0001-01-02부터 9999-12-30까지 가능합니다.")
             # 한국 날짜의 자정 이상~다음 자정 미만을 UTC 조회 범위로 바꾼다.
             starts_from = datetime.combine(on_date, time.min, tzinfo=KST).astimezone(timezone.utc)
             starts_until = starts_from + timedelta(days=1)
@@ -81,10 +88,12 @@ class PerformanceApplicationService:
                 performance.show_id, merged["round_number"], exclude_id=perf_id,
             ):
                 raise CatalogConflictError("공연 안에서 회차 번호가 중복됩니다.")
-            has_changes = any(before[key] != value for key, value in changes.items())
-            if has_changes and self._policy.block_performance_changes_with_links:
+            changed_fields = {key for key, value in changes.items() if before[key] != value}
+            # 좌석 생성 뒤에도 판매 상태는 바꿀 수 있다. 일정·회차번호·매수의
+            # 실제 변경은 기존 연결 제한을 적용하며, 혼합 PATCH도 전체를 거절한다.
+            if changed_fields - {"status"} and self._policy.block_performance_changes_with_links:
                 if await self._has_links(perf_id):
-                    raise CatalogConflictError("좌석 구성 또는 예매가 연결된 회차는 변경할 수 없습니다.")
+                    raise CatalogConflictError("좌석 구성 또는 예매가 연결된 회차는 상태 외 정보를 변경할 수 없습니다.")
             performance = await self._repository.update(perf_id, changes)
             await self._uow.commit()
             return performance
