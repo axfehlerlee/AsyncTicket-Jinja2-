@@ -10,8 +10,9 @@ class PerformanceSeats(Base):
     __tablename__ = "performance_seats"
 
     perf_seat_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    reserv_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("reservations.reserv_id"), nullable=False
+    # 예매 전에는 비워두고, 예매 생성 후 같은 트랜잭션에서 연결한다.
+    reserv_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("reservations.reserv_id"), nullable=True
     )
     seat_id2: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("seats_info.seat_id"), nullable=False
