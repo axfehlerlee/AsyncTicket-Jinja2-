@@ -22,19 +22,20 @@
 ```text
 src/asyncticket/
 ├── main.py                         # FastAPI 생성·라우터·예외 처리 등록
-├── dependencies.py                 # DB 구현과 응용 서비스 연결
+├── dependencies.py                 # 기존 override import 호환 경로
+├── wiring/catalog.py               # 공연·회차의 실제 객체 생성과 주입 등록
 ├── shows/
-│   ├── presentation/               # router.py, schemas.py
+│   ├── presentation/               # router.py, schemas.py, dependencies.py
 │   ├── application/                # service.py
 │   ├── domain/                     # show.py, repositories.py
 │   └── infrastructure/             # models.py, repositories.py
 ├── performances/
-│   ├── presentation/               # router.py, schemas.py
+│   ├── presentation/               # router.py, schemas.py, dependencies.py
 │   ├── application/                # service.py
 │   ├── domain/                     # performance.py, repositories.py
 │   └── infrastructure/             # models.py, repositories.py
 └── shared/
-    ├── core/                       # 팀 공통 Base·DB 세션·logger
+    ├── core/                       # 팀 공통 Base·DB 세션·logger·APIResponse·예외 처리
     ├── domain/                     # 사용자·정책·값 검증·연결/UoW 계약
     ├── infrastructure/             # 연결 데이터 SELECT·UoW 구현
     └── presentation/               # 인증 연결·공통 오류·엄격한 날짜 형식
@@ -66,7 +67,7 @@ sequenceDiagram
     A->>I: UoW.commit()
     I->>DB: COMMIT
     A-->>P: 생성된 Performance
-    P-->>C: 201 + Location + PerformanceResponse
+    P-->>C: 201 + Location + APIResponse.data에 PerformanceResponse
 ```
 
 1. [회차 라우터](../src/asyncticket/performances/presentation/router.py)의
@@ -95,7 +96,14 @@ sequenceDiagram
 
 서비스 생성자는 실제 DB 저장소 대신 `PerformanceRepository`라는 `Protocol`을 받는다.
 Protocol은 “어떤 메서드가 필요하다”는 계약이다. 실제 구현을 정하는 곳은
-[dependencies.py](../src/asyncticket/dependencies.py)다.
+[wiring/catalog.py](../src/asyncticket/wiring/catalog.py)다.
+
+각 표현 계층의 `dependencies.py`에는 `provide_show_service`,
+`provide_performance_service` 주입 계약만 둔다. 라우터는 이 계약만 참조하고,
+실제 SQLAlchemy 저장소와 서비스 생성 함수는 wiring에 둔다.
+`main.create_app()`이 공용 `wire_dependencies(app)`를 호출해 계약과 생성 함수를 연결한다.
+회차 쓰기와 부모 공연 소유권 조회에는 동일 요청의 DB 세션이 주입된다.
+루트 `dependencies.py`의 기존 서비스 이름은 외부 테스트 override의 호환 경로로 유지한다.
 
 ```text
 응용 서비스 → 도메인의 저장소 계약
@@ -123,7 +131,19 @@ Protocol은 “어떤 메서드가 필요하다”는 계약이다. 실제 구�
 도메인·응용에서는 `CatalogNotFoundError`, `CatalogForbiddenError`,
 `CatalogConflictError`, `CatalogValidationError`를 발생시킨다.
 [표현 계층의 오류 변환](../src/asyncticket/shared/presentation/catalog_http.py)이
-각각 404·403·409·422와 `{detail: {code, message}}`를 만든다.
+각 예외를 팀의 NotFoundException·ForbiddenException·ConflictException·ValidationException으로
+변환하고 팀 공통 처리기에 전달한다. 공통 처리기는 404·403·409·422와
+`{success, code, message, errors, data, responded_at}` 응답을 만든다.
+도메인과 응용 서비스에는 HTTP 라이브러리를 추가하지 않는다.
+
+공용 앱은 `register_exception_handlers`를 먼저 등록하고 `register_catalog_errors`로
+공연·회차 예외를 연결한다. 후자는 입력 422를 따로 처리하지 않아 필드별 오류는
+공통 처리기에서 생성된다. 인증 401의 Bearer 헤더와 인증 미연결 503도 유지한다.
+미처리 오류는 공통 500 처리기가 일반 메시지로 응답하며 내부 예외는 응답하지 않는다.
+
+성공 DTO는 라우터에서 `APIResponse[DTO].ok(data=...)`로 감싼다.
+생성 201과 Location은 유지하고 삭제 204는 본문 없이 반환한다.
+정확한 오류 코드·JSON 구조는 [API 명세 대응](shows-performances.md)을 따른다.
 
 ## 인증과 DB 검증 범위
 

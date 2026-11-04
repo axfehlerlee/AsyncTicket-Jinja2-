@@ -6,6 +6,7 @@ import unittest
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
+from unittest.mock import AsyncMock, patch
 
 from sqlalchemy import BigInteger, Column, Integer, MetaData, Table, create_engine, event, select, func
 from sqlalchemy.dialects import postgresql
@@ -13,7 +14,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import set_committed_value
 from sqlalchemy.schema import CreateTable
 
-from asyncticket.dependencies import get_performance_service, get_show_service
+from asyncticket.performances.presentation.dependencies import provide_performance_service
+from asyncticket.shows.presentation.dependencies import provide_show_service
 from asyncticket.main import create_app
 from asyncticket.performances.application.service import PerformanceApplicationService
 from asyncticket.performances.infrastructure.models import PerformanceModel
@@ -94,11 +96,11 @@ class FixtureAuthenticator:
 
 
 async def asgi_get(app, url: str) -> tuple[int, dict]:
-    status, _, body = await asgi_request(app, "GET", url)
+    status, _, body = await catalog_request(app, "GET", url)
     return status, body
 
 
-async def asgi_request(app, method, url, body=None, token=None):
+async def asgi_request(app, method, url, body=None, token=None, *, raise_server_exceptions=True):
     parts = urlsplit(url)
     messages = []
 
@@ -108,21 +110,42 @@ async def asgi_request(app, method, url, body=None, token=None):
     async def send(message):
         messages.append(message)
 
-    await app(
-        {
-            "type": "http", "asgi": {"version": "3.0", "spec_version": "2.4"},
-            "http_version": "1.1", "method": method, "scheme": "http",
-            "path": parts.path, "raw_path": parts.path.encode(),
-            "query_string": parts.query.encode(), "root_path": "",
-            "headers": [(b"host", b"testserver"), (b"content-type", b"application/json")]
-            + ([(b"authorization", f"Bearer {token}".encode())] if token else []),
-            "client": ("127.0.0.1", 1234), "server": ("testserver", 80),
-        }, receive, send,
-    )
+    try:
+        await app(
+            {
+                "type": "http", "asgi": {"version": "3.0", "spec_version": "2.4"},
+                "http_version": "1.1", "method": method, "scheme": "http",
+                "path": parts.path, "raw_path": parts.path.encode(),
+                "query_string": parts.query.encode(), "root_path": "",
+                "headers": [(b"host", b"testserver"), (b"content-type", b"application/json")]
+                + ([(b"authorization", f"Bearer {token}".encode())] if token else []),
+                "client": ("127.0.0.1", 1234), "server": ("testserver", 80),
+            }, receive, send,
+        )
+    except Exception:
+        if raise_server_exceptions or not any(m["type"] == "http.response.start" for m in messages):
+            raise
     status = next(m["status"] for m in messages if m["type"] == "http.response.start")
     body = b"".join(m.get("body", b"") for m in messages if m["type"] == "http.response.body")
     headers = next(m["headers"] for m in messages if m["type"] == "http.response.start")
     return status, dict(headers), json.loads(body) if body else None
+
+
+async def catalog_request(app, method, url, body=None, token=None):
+    """Check the actual envelope before existing behavior tests inspect DTO data."""
+    status, headers, result = await asgi_request(app, method, url, body, token)
+    if urlsplit(url).path.startswith("/v1/") and status != 204:
+        assert set(result) == {"success", "code", "message", "errors", "data", "responded_at"}, result
+        assert datetime.fromisoformat(result["responded_at"]).utcoffset() == timedelta(0), result
+        assert isinstance(result["message"], str) and result["message"], result
+        if status < 400:
+            assert result["success"] is True and result["code"] == "OK", result
+            assert result["errors"] is None, result
+            result = result["data"]
+        else:
+            assert result["success"] is False and result["data"] is None, result
+            assert isinstance(result["code"], str) and result["code"], result
+    return status, headers, result
 
 
 class CatalogApiTests(unittest.IsolatedAsyncioTestCase):
@@ -177,8 +200,8 @@ class CatalogApiTests(unittest.IsolatedAsyncioTestCase):
         self.shows = ShowApplicationService(SqlAlchemyShowRepository(adapter), self.relations, self.uow, self.policy)
         self.performances = PerformanceApplicationService(SqlAlchemyPerformanceRepository(adapter), self.shows, self.relations, self.uow, self.policy)
         self.app = create_app(authenticator=FixtureAuthenticator())
-        self.app.dependency_overrides[get_show_service] = lambda: self.shows
-        self.app.dependency_overrides[get_performance_service] = lambda: self.performances
+        self.app.dependency_overrides[provide_show_service] = lambda: self.shows
+        self.app.dependency_overrides[provide_performance_service] = lambda: self.performances
 
     def _seed(self, name: str, models: list) -> None:
         table = self.metadata.tables[name]
@@ -223,7 +246,7 @@ class CatalogApiTests(unittest.IsolatedAsyncioTestCase):
         for path in ("/v1/shows/999", "/v1/performances/999", "/v1/shows/999/performances"):
             status, body = await asgi_get(self.app, path)
             self.assertEqual(status, 404, path)
-            self.assertEqual(body["detail"]["code"], "RESOURCE_NOT_FOUND")
+            self.assertEqual(body["code"], "RESOURCE_NOT_FOUND")
 
     async def test_invalid_inputs_are_422(self) -> None:
         for path in (
@@ -298,6 +321,7 @@ class CatalogApiTests(unittest.IsolatedAsyncioTestCase):
                     imports = [node.module or "" for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)]
                     imports += [alias.name for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names]
                     self.assertFalse(any(".infrastructure" in name for name in imports), path)
+                    self.assertFalse(any(name == "asyncticket.dependencies" or name.startswith("asyncticket.wiring") for name in imports), path)
                     if layer == "domain":
                         self.assertFalse(any(name.split(".")[0] in ("fastapi", "sqlalchemy", "pydantic") for name in imports), path)
 
@@ -339,7 +363,7 @@ class CatalogApiTests(unittest.IsolatedAsyncioTestCase):
         }
 
     async def test_show_create_update_delete_contract(self) -> None:
-        status, headers, body = await asgi_request(
+        status, headers, body = await catalog_request(
             self.app, "POST", "/v1/shows", self.show_body(), "seller",
         )
         self.assertEqual(status, 201, body)
@@ -348,7 +372,7 @@ class CatalogApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("user_id", body)
         owner = self.session.scalar(select(ShowModel.user_id).where(ShowModel.show_id == show_id))
         self.assertEqual(owner, 1)
-        status, _, body = await asgi_request(
+        status, _, body = await catalog_request(
             self.app, "PATCH", f"/v1/shows/{show_id}",
             {"title": "변경 공연", "description": None, "runtime": None, "venues_id": 2}, "seller",
         )
@@ -358,21 +382,21 @@ class CatalogApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(body["runtime"])
         self.assertEqual(body["performer"], "출연자")
         self.assertIsNotNone(body["updated_at"])
-        status, headers, body = await asgi_request(self.app, "DELETE", f"/v1/shows/{show_id}", token="seller")
+        status, headers, body = await catalog_request(self.app, "DELETE", f"/v1/shows/{show_id}", token="seller")
         self.assertEqual(status, 204)
         self.assertIsNone(body)
         self.assertNotIn(b"content-type", headers)
         self.assertEqual((await asgi_get(self.app, f"/v1/shows/{show_id}"))[0], 404)
 
     async def test_performance_create_update_delete_contract(self) -> None:
-        status, headers, body = await asgi_request(
+        status, headers, body = await catalog_request(
             self.app, "POST", "/v1/shows/2/performances", self.performance_body(), "seller",
         )
         self.assertEqual(status, 201, body)
         perf_id = body["perf_id"]
         self.assertEqual(headers[b"location"].decode(), f"/v1/performances/{perf_id}")
         self.assertEqual((body["show_id"], body["max_tickets_per_user"]), (2, 3))
-        status, _, body = await asgi_request(
+        status, _, body = await catalog_request(
             self.app, "PATCH", f"/v1/performances/{perf_id}",
             {"booking_closes_at": "2026-11-07T18:30:00+09:00", "round_number": 8}, "seller",
         )
@@ -380,7 +404,7 @@ class CatalogApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["round_number"], 8)
         self.assertEqual(body["status"], "SCHEDULED")
         self.assertEqual(datetime.fromisoformat(body["booking_closes_at"]), datetime.fromisoformat("2026-11-07T18:30:00+09:00"))
-        status, headers, body = await asgi_request(self.app, "DELETE", f"/v1/performances/{perf_id}", token="seller")
+        status, headers, body = await catalog_request(self.app, "DELETE", f"/v1/performances/{perf_id}", token="seller")
         self.assertEqual(status, 204)
         self.assertIsNone(body)
         self.assertNotIn(b"content-type", headers)
@@ -399,32 +423,32 @@ class CatalogApiTests(unittest.IsolatedAsyncioTestCase):
     async def test_all_six_writes_require_verified_authentication(self) -> None:
         for method, url, body in self.write_requests():
             for token in (None, "invalid"):
-                status, headers, result = await asgi_request(self.app, method, url, body, token)
+                status, headers, result = await catalog_request(self.app, method, url, body, token)
                 self.assertEqual(status, 401, (url, result))
                 self.assertEqual(headers[b"www-authenticate"], b"Bearer")
-                self.assertEqual(result["detail"]["code"], "AUTHENTICATION_REQUIRED")
+                self.assertEqual(result["code"], "AUTHENTICATION_REQUIRED")
 
     async def test_all_six_writes_forbid_buyer(self) -> None:
         for method, url, body in self.write_requests():
-            status, _, result = await asgi_request(self.app, method, url, body, "buyer")
+            status, _, result = await catalog_request(self.app, method, url, body, "buyer")
             self.assertEqual(status, 403, (url, result))
 
     async def test_seller_cannot_manage_other_sellers_data(self) -> None:
         for method, url, body in self.write_requests()[1:]:
-            status, _, result = await asgi_request(self.app, method, url, body, "other")
+            status, _, result = await catalog_request(self.app, method, url, body, "other")
             self.assertEqual(status, 403, (url, result))
 
     async def test_admin_can_manage_existing_show_under_explicit_policy(self) -> None:
-        status, _, result = await asgi_request(self.app, "PATCH", "/v1/shows/1", {"title": "관리자 변경"}, "admin")
+        status, _, result = await catalog_request(self.app, "PATCH", "/v1/shows/1", {"title": "관리자 변경"}, "admin")
         self.assertEqual(status, 200, result)
         self.assertEqual(result["title"], "관리자 변경")
         self.assertEqual(self.session.scalar(select(ShowModel.user_id).where(ShowModel.show_id == 1)), 1)
 
     async def test_missing_common_authentication_module_never_grants_access(self) -> None:
         app = create_app()
-        status, _, result = await asgi_request(app, "POST", "/v1/shows", self.show_body(), "anything")
+        status, _, result = await catalog_request(app, "POST", "/v1/shows", self.show_body(), "anything")
         self.assertEqual(status, 503)
-        self.assertEqual(result["detail"]["code"], "INTEGRATION_UNAVAILABLE")
+        self.assertEqual(result["code"], "INTEGRATION_UNAVAILABLE")
 
     async def test_writes_return_404_for_missing_targets(self) -> None:
         cases = [
@@ -437,7 +461,7 @@ class CatalogApiTests(unittest.IsolatedAsyncioTestCase):
             ("PATCH", "/v1/shows/3", {"venues_id": 999}),
         ]
         for method, url, body in cases:
-            status, _, result = await asgi_request(self.app, method, url, body, "seller")
+            status, _, result = await catalog_request(self.app, method, url, body, "seller")
             self.assertEqual(status, 404, (url, result))
 
     async def test_partial_updates_reject_empty_null_immutable_and_unknown_fields(self) -> None:
@@ -451,15 +475,15 @@ class CatalogApiTests(unittest.IsolatedAsyncioTestCase):
             ("/v1/performances/11", {"max_tickets_per_user": None}),
         ]
         for url, body in cases:
-            status, _, result = await asgi_request(self.app, "PATCH", url, body, "seller")
+            status, _, result = await catalog_request(self.app, "PATCH", url, body, "seller")
             self.assertEqual(status, 422, (url, body, result))
-            self.assertEqual(result["detail"]["code"], "VALIDATION_ERROR")
+            self.assertEqual(result["code"], "REQUEST_VALIDATION_ERROR")
 
     async def test_create_input_fields_lengths_and_types(self) -> None:
         for changes in ({"title": " "}, {"title": "x" * 256}, {"type": ""},
                         {"runtime": 0}, {"venues_id": True}, {"user_id": 2},
                         {"show_id": 99}, {"performer": "x" * 256}):
-            status, _, result = await asgi_request(self.app, "POST", "/v1/shows", self.show_body(**changes), "seller")
+            status, _, result = await catalog_request(self.app, "POST", "/v1/shows", self.show_body(**changes), "seller")
             self.assertEqual(status, 422, (changes, result))
 
     async def test_performance_time_order_and_timezone_validation(self) -> None:
@@ -471,16 +495,16 @@ class CatalogApiTests(unittest.IsolatedAsyncioTestCase):
             {"round_number": 0}, {"max_tickets_per_user": 0}, {"status": ""},
         ]
         for changes in cases:
-            status, _, result = await asgi_request(self.app, "POST", "/v1/shows/2/performances", self.performance_body(**changes), "seller")
+            status, _, result = await catalog_request(self.app, "POST", "/v1/shows/2/performances", self.performance_body(**changes), "seller")
             self.assertEqual(status, 422, (changes, result))
-        status, _, result = await asgi_request(
+        status, _, result = await catalog_request(
             self.app, "PATCH", "/v1/performances/11",
             {"booking_closes_at": "2026-11-07T20:00:00+09:00"}, "seller",
         )
         self.assertEqual(status, 422, result)
 
     async def test_booking_can_close_exactly_at_performance_start(self) -> None:
-        status, _, result = await asgi_request(
+        status, _, result = await catalog_request(
             self.app, "POST", "/v1/shows/2/performances",
             self.performance_body(booking_closes_at="2026-11-07T19:00:00+09:00"), "seller",
         )
@@ -494,7 +518,7 @@ class CatalogApiTests(unittest.IsolatedAsyncioTestCase):
             ("PATCH", "/v1/performances/11", {"round_number": 1}),
         ]
         for method, url, body in cases:
-            status, _, result = await asgi_request(self.app, method, url, body, "seller")
+            status, _, result = await catalog_request(self.app, method, url, body, "seller")
             self.assertEqual(status, 409, (url, result))
         self.assertEqual((await asgi_get(self.app, "/v1/performances/11"))[1]["round_number"], 2)
 
@@ -511,7 +535,7 @@ class CatalogApiTests(unittest.IsolatedAsyncioTestCase):
             ("PATCH", {"round_number": 99}), ("PATCH", {"max_tickets_per_user": 2}),
             ("DELETE", None),
         ]:
-            status, _, result = await asgi_request(self.app, method, "/v1/performances/11", body, "seller")
+            status, _, result = await catalog_request(self.app, method, "/v1/performances/11", body, "seller")
             self.assertEqual(status, 409, result)
             self.assertEqual((await asgi_get(self.app, "/v1/performances/11"))[1], before)
         self.assertEqual(self.session.scalar(select(func.count()).select_from(self.metadata.tables["seats_info"])), 1)
@@ -522,7 +546,7 @@ class CatalogApiTests(unittest.IsolatedAsyncioTestCase):
         before = (await asgi_get(self.app, "/v1/performances/11"))[1]
         # These are fixture values, not a decision about the team's status enum.
         for next_status in ("ON_SALE", "CLOSED"):
-            status, _, result = await asgi_request(
+            status, _, result = await catalog_request(
                 self.app, "PATCH", "/v1/performances/11", {"status": next_status}, "seller",
             )
             self.assertEqual(status, 200, result)
@@ -535,7 +559,7 @@ class CatalogApiTests(unittest.IsolatedAsyncioTestCase):
         self.session.execute(self.metadata.tables["reservations"].insert().values(reserv_id=1, perf_id=11))
         self.session.commit()
         before = (await asgi_get(self.app, "/v1/performances/11"))[1]
-        status, _, result = await asgi_request(
+        status, _, result = await catalog_request(
             self.app, "PATCH", "/v1/performances/11", {"status": "CLOSED"}, "seller",
         )
         self.assertEqual(status, 200, result)
@@ -547,7 +571,7 @@ class CatalogApiTests(unittest.IsolatedAsyncioTestCase):
         self.session.execute(self.metadata.tables["seats_info"].insert().values(seat_id=1, perf_id=11))
         self.session.commit()
         before = (await asgi_get(self.app, "/v1/performances/11"))[1]
-        status, _, result = await asgi_request(
+        status, _, result = await catalog_request(
             self.app, "PATCH", "/v1/performances/11",
             {"status": "ON_SALE", "max_tickets_per_user": 2}, "seller",
         )
@@ -558,7 +582,7 @@ class CatalogApiTests(unittest.IsolatedAsyncioTestCase):
         self.session.execute(self.metadata.tables["reservations"].insert().values(reserv_id=1, perf_id=11))
         self.session.commit()
         for method, body in (("PATCH", {"max_tickets_per_user": 2}), ("DELETE", None)):
-            status, _, result = await asgi_request(self.app, method, "/v1/performances/11", body, "seller")
+            status, _, result = await catalog_request(self.app, method, "/v1/performances/11", body, "seller")
             self.assertEqual(status, 409, result)
         self.assertEqual(self.session.scalar(select(func.count()).select_from(self.metadata.tables["reservations"])), 1)
 
@@ -572,21 +596,142 @@ class CatalogApiTests(unittest.IsolatedAsyncioTestCase):
             async def rollback(self):
                 await adapter.rollback()
         self.shows._uow = RejectCommit()
-        status, _, result = await asgi_request(self.app, "POST", "/v1/shows", self.show_body(), "seller")
+        status, _, result = await catalog_request(self.app, "POST", "/v1/shows", self.show_body(), "seller")
         self.assertEqual(status, 409, result)
         self.assertEqual(self.session.scalar(select(func.count()).select_from(ShowModel)), before)
 
     async def test_configurable_status_allowlist_is_applied(self) -> None:
         self.performances._policy = CatalogPolicy(performance_statuses=frozenset({"SCHEDULED"}))
-        status, _, result = await asgi_request(self.app, "POST", "/v1/shows/2/performances", self.performance_body(status="UNCONFIRMED"), "seller")
+        status, _, result = await catalog_request(self.app, "POST", "/v1/shows/2/performances", self.performance_body(status="UNCONFIRMED"), "seller")
         self.assertEqual(status, 422, result)
         self.session.execute(self.metadata.tables["seats_info"].insert().values(seat_id=1, perf_id=11))
         self.session.commit()
-        status, _, result = await asgi_request(
+        status, _, result = await catalog_request(
             self.app, "PATCH", "/v1/performances/11", {"status": "UNCONFIRMED"}, "seller",
         )
         self.assertEqual(status, 422, result)
         self.assertEqual((await asgi_get(self.app, "/v1/performances/11"))[1]["status"], "SCHEDULED")
+
+    async def test_openapi_declares_common_success_errors_and_bodyless_deletes(self) -> None:
+        _, schema = await asgi_get(self.app, "/openapi.json")
+        components = schema["components"]["schemas"]
+        data_types = {
+            ("/v1/shows", "get"): "ShowListResponse",
+            ("/v1/shows", "post"): "ShowResponse",
+            ("/v1/shows/{show_id}", "get"): "ShowResponse",
+            ("/v1/shows/{show_id}", "patch"): "ShowResponse",
+            ("/v1/shows/{show_id}/performances", "get"): "PerformanceListResponse",
+            ("/v1/shows/{show_id}/performances", "post"): "PerformanceResponse",
+            ("/v1/performances/{perf_id}", "get"): "PerformanceResponse",
+            ("/v1/performances/{perf_id}", "patch"): "PerformanceResponse",
+        }
+        for path, operations in schema["paths"].items():
+            for method, operation in operations.items():
+                responses = operation["responses"]
+                if method == "delete":
+                    self.assertNotIn("content", responses["204"])
+                else:
+                    success = responses["201" if method == "post" else "200"]
+                    ref = success["content"]["application/json"]["schema"]["$ref"]
+                    envelope = components[ref.rsplit("/", 1)[1]]
+                    self.assertEqual(set(envelope["properties"]), {
+                        "success", "code", "message", "errors", "data", "responded_at",
+                    })
+                    self.assertIn(
+                        {"$ref": f"#/components/schemas/{data_types[path, method]}"},
+                        envelope["properties"]["data"]["anyOf"],
+                    )
+                for code in (401, 403, 404, 409, 422, 500, 503):
+                    ref = responses[str(code)]["content"]["application/json"]["schema"]["$ref"]
+                    self.assertEqual(components[ref.rsplit("/", 1)[1]]["properties"]["data"]["type"], "null")
+
+    async def test_app_wiring_builds_real_services_with_one_session_per_request(self) -> None:
+        from asyncticket.shared.core.database import get_db
+
+        session_calls = []
+
+        async def fixture_db():
+            session_calls.append("opened")
+            yield AsyncSessionAdapter(self.session)
+
+        app = create_app(authenticator=FixtureAuthenticator())
+        # 서비스를 대체하지 않고 main→wiring→실제 서비스→SQLite SQL을 통과한다.
+        app.dependency_overrides[get_db] = fixture_db
+        status, _, listing = await catalog_request(app, "GET", "/v1/shows")
+        self.assertEqual(status, 200)
+        self.assertEqual(listing["total"], 3)
+        session_calls.clear()
+        status, headers, result = await catalog_request(
+            app, "POST", "/v1/shows/2/performances", self.performance_body(), "seller",
+        )
+        self.assertEqual(status, 201, result)
+        self.assertEqual(session_calls, ["opened"])
+        self.assertEqual(headers[b"location"].decode(), f"/v1/performances/{result['perf_id']}")
+        self.assertEqual(self.session.scalar(select(PerformanceModel.show_id).where(
+            PerformanceModel.perf_id == result["perf_id"]
+        )), 2)
+
+    async def test_common_validation_errors_include_fields_without_echoing_input(self) -> None:
+        cases = [
+            ("GET", "/v1/shows?page=0", None, "query.page"),
+            ("GET", "/v1/performances/0", None, "path.perf_id"),
+            ("PATCH", "/v1/shows/1", {"private_extra": "do-not-echo-marker"}, "private_extra"),
+        ]
+        for method, path, payload, field in cases:
+            with self.subTest(path=path, field=field):
+                status, _, result = await catalog_request(self.app, method, path, payload, "seller")
+                self.assertEqual(status, 422)
+                self.assertEqual(result["code"], "REQUEST_VALIDATION_ERROR")
+                self.assertTrue(result["errors"][field])
+                self.assertNotIn("do-not-echo-marker", json.dumps(result))
+                self.assertNotIn("input", result["errors"])
+
+    async def test_business_validation_keeps_code_and_public_message(self) -> None:
+        status, _, result = await catalog_request(
+            self.app, "PATCH", "/v1/performances/11",
+            {"booking_closes_at": "2026-11-07T20:00:00+09:00"}, "seller",
+        )
+        self.assertEqual(status, 422)
+        self.assertEqual(result["code"], "VALIDATION_ERROR")
+        self.assertEqual(result["errors"], {})
+        self.assertIsInstance(result["message"], str)
+
+    async def test_main_handles_shared_exceptions_from_integrated_services(self) -> None:
+        from asyncticket.shared.core.exceptions import NotFoundException
+
+        with patch.object(self.shows, "find_by_id", new=AsyncMock(
+            side_effect=NotFoundException("공통 모듈 오류", error_code="SHOW_NOT_FOUND")
+        )):
+            status, _, result = await catalog_request(self.app, "GET", "/v1/shows/1")
+        self.assertEqual(status, 404)
+        self.assertEqual(result["code"], "SHOW_NOT_FOUND")
+        self.assertEqual(result["message"], "공통 모듈 오류")
+
+    async def test_unexpected_commit_errors_roll_back_and_return_masked_common_500(self) -> None:
+        cases = [
+            (self.shows, ShowModel, "/v1/shows", self.show_body()),
+            (self.performances, PerformanceModel, "/v1/shows/2/performances", self.performance_body()),
+        ]
+        for service, model, path, payload in cases:
+            with self.subTest(path=path):
+                before = self.session.scalar(select(func.count()).select_from(model))
+                with (
+                    patch.object(service._uow, "commit", new=AsyncMock(
+                        side_effect=RuntimeError("internal-database-error-marker")
+                    )),
+                    self.assertLogs("asyncticket.shared.core.exception_handlers", level="ERROR"),
+                ):
+                    status, _, result = await asgi_request(
+                        self.app, "POST", path, payload, "seller", raise_server_exceptions=False,
+                    )
+                self.assertEqual(status, 500)
+                self.assertEqual(set(result), {"success", "code", "message", "errors", "data", "responded_at"})
+                self.assertFalse(result["success"])
+                self.assertEqual(result["code"], "INTERNAL_SERVER_ERROR")
+                self.assertIsNone(result["data"])
+                self.assertIsNone(result["errors"])
+                self.assertNotIn("internal-database-error-marker", json.dumps(result))
+                self.assertEqual(self.session.scalar(select(func.count()).select_from(model)), before)
 
 
 if __name__ == "__main__":
