@@ -2,7 +2,8 @@
 
 from abc import ABC, abstractmethod
 
-from asyncticket.seats.domain.seat import PerformanceSeat, SeatInfo
+from asyncticket.seats.domain.performance_seat import PerformanceSeat
+from asyncticket.seats.domain.seat_info import SeatInfo
 
 
 class SeatInfoRepository(ABC):

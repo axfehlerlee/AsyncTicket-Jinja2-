@@ -1,5 +1,5 @@
 from asyncticket.seats.domain.repository import PerformanceSeatRepository
-from asyncticket.seats.domain.seat import PerformanceSeat
+from asyncticket.seats.domain.performance_seat import PerformanceSeat
 
 
 from asyncticket.shared.core.exceptions import (

@@ -3,7 +3,7 @@
 from dataclasses import FrozenInstanceError
 import unittest
 
-from asyncticket.seats.domain.seat import SeatInfo
+from asyncticket.seats.domain.seat_info import SeatInfo
 
 
 class SeatInfoTests(unittest.TestCase):

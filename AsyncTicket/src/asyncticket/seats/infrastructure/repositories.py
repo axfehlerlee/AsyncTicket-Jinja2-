@@ -8,7 +8,8 @@ from asyncticket.seats.domain.repository import (
     SeatInfoRepository,
     SeatLookupConflictError,
 )
-from asyncticket.seats.domain.seat import PerformanceSeat, SeatInfo
+from asyncticket.seats.domain.performance_seat import PerformanceSeat
+from asyncticket.seats.domain.seat_info import SeatInfo
 from asyncticket.seats.infrastructure.models import PerformanceSeats, SeatsInfoModel
 
 
