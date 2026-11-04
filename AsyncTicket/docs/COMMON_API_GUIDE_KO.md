@@ -70,3 +70,10 @@ get_db는 yield 이후 정상적으로 돌아오면 commit하고, 요청 처리 
 요청 전체의 원자성과 저장 확정 책임을 통일하는 작업은 별도 통합 검토가 필요하다.
 의존성 정리 시점과 실제 HTTP 응답 전송 시점도 별도이며, 이 단위 검사는 HTTP 전송
 이전에 commit이 끝나는 것을 보장하지 않는다.
+
+## 좌석 도메인 분리
+
+- `seats/`: 좌석 등급 설정(`SeatInfo`, `SeatsInfoModel`), 등급 저장소·서비스.
+- `performance_seats/`: 개별 판매 좌석(`PerformanceSeat`, `PerformanceSeats`), 조회·예매 연결 서비스와 기존 좌석 API.
+- `wiring/seats.py`, `wiring/performance_seats.py`에서 각각 연결한다.
+- 기존 API 경로, 테이블명, 컬럼과 FK는 유지한다. 개별 좌석 저장소는 조회에 필요한 등급 ORM을 참조한다.

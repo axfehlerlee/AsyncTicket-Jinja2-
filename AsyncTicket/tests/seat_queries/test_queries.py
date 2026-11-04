@@ -12,11 +12,13 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import BigInteger, Column, MetaData, Table, insert, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from asyncticket.wiring.seats import wire_dependencies
-from asyncticket.seats.infrastructure.models import PerformanceSeats, SeatsInfoModel
-from asyncticket.seats.infrastructure.repositories import SqlAlchemySeatRepository
+from asyncticket.wiring.performance_seats import wire_dependencies
+from asyncticket.performance_seats.infrastructure.models import PerformanceSeats
+from asyncticket.seats.infrastructure.models import SeatsInfoModel
+from asyncticket.performance_seats.infrastructure.repositories import SqlAlchemyPerformanceSeatRepository
+from asyncticket.seats.infrastructure.repositories import SqlAlchemySeatInfoRepository
 from fastapi import FastAPI
-from asyncticket.seats.presentation.router import router as seat_router
+from asyncticket.performance_seats.presentation.router import router as seat_router
 from asyncticket.shared.core.exception_handlers import register_exception_handlers
 
 
@@ -74,7 +76,7 @@ class SeatQueryTests(unittest.IsolatedAsyncioTestCase):
         await self.engine.dispose()
 
     async def test_unbooked_seat_can_be_linked_without_committing(self):
-        from asyncticket.seats.application.service import SeatService, SeatReservationConflictError
+        from asyncticket.performance_seats.application.service import PerformanceSeatService, SeatReservationConflictError
 
         async with self.sessions() as session:
             await session.execute(insert(PerformanceSeats).values(
@@ -82,7 +84,7 @@ class SeatQueryTests(unittest.IsolatedAsyncioTestCase):
                 status="TEST_AVAILABLE", seat_seq="B01",
             ))
             await session.commit()
-            service = SeatService(SqlAlchemySeatRepository(session))
+            service = PerformanceSeatService(SqlAlchemyPerformanceSeatRepository(session))
             args = dict(perf_id=10, perf_seat_id=2001, reserv_id=1,
                         expected_status="TEST_AVAILABLE", reserved_status="TEST_RESERVED")
             # 다른 회차의 예매나 잘못된 상태로는 연결할 수 없다.
@@ -100,17 +102,17 @@ class SeatQueryTests(unittest.IsolatedAsyncioTestCase):
         async with self.sessions() as session:
             seat = await session.get(PerformanceSeats, 2001)
             self.assertEqual((seat.reserv_id, seat.status), (None, "TEST_AVAILABLE"))
-            await SeatService(SqlAlchemySeatRepository(session)).assign_reservation(**args)
+            await PerformanceSeatService(SqlAlchemyPerformanceSeatRepository(session)).assign_reservation(**args)
             await session.commit()
         async with self.sessions() as session:
             seat = await session.get(PerformanceSeats, 2001)
             self.assertEqual((seat.reserv_id, seat.status), (1, "TEST_RESERVED"))
 
     async def test_invalid_reservation_link_uses_common_validation_exception(self):
-        from asyncticket.seats.application.service import SeatService
+        from asyncticket.performance_seats.application.service import PerformanceSeatService
         from asyncticket.shared.core.exceptions import ValidationException
         async with self.sessions() as session:
-            service = SeatService(SqlAlchemySeatRepository(session))
+            service = PerformanceSeatService(SqlAlchemyPerformanceSeatRepository(session))
             args = dict(perf_id=10, perf_seat_id=1001, reserv_id=1,
                         expected_status="TEST_AVAILABLE", reserved_status="TEST_RESERVED")
             for override, code in (
@@ -195,7 +197,7 @@ class SeatQueryTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_grade_repository_returns_domain_objects(self):
         async with self.sessions() as session:
-            repository = SqlAlchemySeatRepository(session)
+            repository = SqlAlchemySeatInfoRepository(session)
             grade = await repository.get_seat_info(101)
             self.assertEqual(grade.name, "R석")
             self.assertIsNone(await repository.get_seat_info(999))
@@ -227,24 +229,46 @@ class SeatQueryTests(unittest.IsolatedAsyncioTestCase):
                 if status == 422:
                     self.assertIn("path.perf_id", body["errors"])
 
+    async def test_grade_wiring_uses_its_own_repository(self):
+        from fastapi import Depends
+        from asyncticket.seats.application.service import SeatInfoService
+        from asyncticket.seats.presentation.dependencies import provide_seat_info_service
+        from asyncticket.wiring.seats import wire_dependencies as wire_grades
+
+        async def get_test_db():
+            async with self.sessions() as session:
+                yield session
+
+        wire_grades(self.app, db_dependency=get_test_db)
+
+        @self.app.get("/test/grades")
+        async def grades(service: SeatInfoService = Depends(provide_seat_info_service)):
+            return await service.list_seat_infos(10)
+
+        response = await self.client.get("/test/grades")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([item["seat_id"] for item in response.json()], [101, 103])
+
     async def test_upper_layers_do_not_import_infrastructure(self):
-        seats = Path(__file__).resolve().parents[2] / "src/asyncticket/seats"
-        for folder in ("domain", "application", "presentation"):
-            for source in (seats / folder).glob("*.py"):
-                tree = ast.parse(source.read_text())
-                imports = []
-                for node in ast.walk(tree):
-                    if isinstance(node, ast.ImportFrom):
-                        imports.append(node.module or "")
-                    elif isinstance(node, ast.Import):
-                        imports.extend(alias.name for alias in node.names)
-                with self.subTest(file=source.name):
-                    self.assertFalse(any(
-                        ".infrastructure" in name
-                        or name.startswith("sqlalchemy")
-                        or name == "asyncticket.shared.core.database"
-                        for name in imports
-                    ))
+        root = Path(__file__).resolve().parents[2] / "src/asyncticket"
+        for domain in ("seats", "performance_seats"):
+            seats = root / domain
+            for folder in ("domain", "application", "presentation"):
+                for source in (seats / folder).glob("*.py"):
+                    tree = ast.parse(source.read_text())
+                    imports = []
+                    for node in ast.walk(tree):
+                        if isinstance(node, ast.ImportFrom):
+                            imports.append(node.module or "")
+                        elif isinstance(node, ast.Import):
+                            imports.extend(alias.name for alias in node.names)
+                    with self.subTest(file=source.name):
+                        self.assertFalse(any(
+                            ".infrastructure" in name
+                            or name.startswith("sqlalchemy")
+                            or name == "asyncticket.shared.core.database"
+                            for name in imports
+                        ))
 
 
 if __name__ == "__main__":

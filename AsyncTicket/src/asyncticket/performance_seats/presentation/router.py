@@ -3,21 +3,21 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path
 
-from asyncticket.seats.application.service import SeatService
-from asyncticket.seats.presentation.dependencies import provide_seat_service
-from asyncticket.seats.presentation.schemas import SeatListResponse, SeatResponse
+from asyncticket.performance_seats.application.service import PerformanceSeatService
+from asyncticket.performance_seats.presentation.dependencies import provide_performance_seat_service
+from asyncticket.performance_seats.presentation.schemas import SeatListResponse, SeatResponse
 from asyncticket.shared.core.schemas import APIResponse
 
 router = APIRouter(
     prefix="/v1/performances", tags=["좌석"],
     responses={code: {"model": APIResponse[None]} for code in (404, 422, 500)},
 )
-SeatServiceDep = Annotated[SeatService, Depends(provide_seat_service)]
+PerformanceSeatServiceDep = Annotated[PerformanceSeatService, Depends(provide_performance_seat_service)]
 
 
 @router.get("/{perf_id}/seats", response_model=APIResponse[SeatListResponse])
 async def list_performance_seats(
-    perf_id: Annotated[int, Path(gt=0)], service: SeatServiceDep,
+    perf_id: Annotated[int, Path(gt=0)], service: PerformanceSeatServiceDep,
 ) -> APIResponse[SeatListResponse]:
     items = await service.list_performance_seats(perf_id)
     # 안쪽 좌석 필드는 기존 계약대로 두고, 팀 공통 data 칸에 목록을 담는다.
@@ -33,7 +33,7 @@ async def list_performance_seats(
 async def get_performance_seat(
     perf_id: Annotated[int, Path(gt=0)],
     seat_seq: Annotated[str, Path(min_length=1, max_length=255)],
-    service: SeatServiceDep,
+    service: PerformanceSeatServiceDep,
 ) -> APIResponse[SeatResponse]:
     seat = await service.get_performance_seat(perf_id, seat_seq)
     # 예매 ID는 공개 조회 응답에 포함하지 않는다. 이 GET은 좌석을 선점하지 않는다.
