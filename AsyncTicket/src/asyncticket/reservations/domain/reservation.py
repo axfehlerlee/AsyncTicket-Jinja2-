@@ -17,15 +17,11 @@
 
 """
 
+from datetime import datetime
+from domain.enums import ReservationStatus
+
+
 # 
-# from datetime import datetime
-
-
-# # (요구사항1) 예매 상태
-# CONFIRMED = "CONFIRMED"
-# CANCELED = "CANCELED"
-
-# # 정의된 요구사항을 클래스에 정의
 
 # # 예매가 가진값들
 # class Reservation:
