@@ -3,9 +3,11 @@ from fastapi import FastAPI
 from asyncticket.wiring.catalog import wire_dependencies as wire_catalog_dependencies
 from asyncticket.wiring.seats import wire_dependencies as wire_seat_dependencies
 from asyncticket.wiring.performance_seats import wire_dependencies as wire_performance_seat_dependencies
+from asyncticket.wiring.venues import wire_dependencies as wire_venue_dependencies
 
 
 def wire_dependencies(app: FastAPI) -> None:
     wire_catalog_dependencies(app)
     wire_seat_dependencies(app)
     wire_performance_seat_dependencies(app)
+    wire_venue_dependencies(app)
