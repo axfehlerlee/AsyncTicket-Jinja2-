@@ -15,3 +15,4 @@ def init_models():
     import asyncticket.reservations.infrastructure.models
     import asyncticket.users.infrastructure.models
     import asyncticket.venues.infrastructure.models
+    import asyncticket.auth.infrastructure.models

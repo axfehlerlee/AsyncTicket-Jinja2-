@@ -18,6 +18,17 @@ from asyncticket.shared.domain.catalog import CatalogAuthenticator, CatalogPolic
 from asyncticket.shared.presentation.catalog_http import register_catalog_errors
 from asyncticket.shows.presentation.router import router as show_router
 
+# auth_router, users_router는 FastAPI 앱에 등록할 라우터
+from asyncticket.auth.presentation.routers.v1.router import (
+    router as auth_router,
+)
+from asyncticket.users.presentation.router.v1.router import (
+    router as users_router,
+)
+from asyncticket.shared.core.exception_handlers import (
+    register_exception_handlers,
+)
+from asyncticket.wiring import wire_dependencies
 # 이 파일에서 사용할 로거 (로그에 "app.main"이라는 이름으로 표시됨)
 logger = get_logger("app.main")
 
@@ -57,11 +68,21 @@ def create_app(
     app.state.catalog_authenticator = authenticator
     app.state.catalog_policy = policy if policy is not None else CatalogPolicy()
     register_catalog_errors(app)
+    
+    register_exception_handlers(app)
+    wire_dependencies(app)
     # 각 라우터에 /v1 prefix가 있으므로 앱에서 중복으로 붙이지 않는다.
     app.include_router(show_router)
     app.include_router(performance_router)
+
+    
+
+    # 인증/사용자 관련 라우터를 등록한다.
+    app.include_router(auth_router)
+    app.include_router(users_router)
     return app
 
 
 # uvicorn asyncticket.main:app 진입점을 유지한다.
 app = create_app()
+

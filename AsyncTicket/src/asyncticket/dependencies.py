@@ -15,6 +15,13 @@ from asyncticket.shared.infrastructure.catalog import (
 from asyncticket.shows.application.service import ShowApplicationService
 from asyncticket.shows.infrastructure.repositories import SqlAlchemyShowRepository
 
+
+from fastapi.security import (
+    HTTPAuthorizationCredentials,
+    HTTPBearer,
+)
+
+
 DatabaseSession = Annotated[AsyncSession, Depends(get_db)]
 
 
@@ -41,3 +48,5 @@ def get_performance_service(
         SqlAlchemyPerformanceRepository(session), show_service,
         SqlAlchemyCatalogRelations(session), SqlAlchemyCatalogUnitOfWork(session), policy,
     )
+
+
