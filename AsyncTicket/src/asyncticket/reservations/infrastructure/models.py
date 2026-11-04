@@ -5,7 +5,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from asyncticket.shared.core.models import Base # 모든 테이블의 부모
 
 
-class Reservation(Base):
+class ReservationModel(Base):
     """예매"""
 
     # DB에 만들어질 실제 테이블 이름
