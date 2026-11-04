@@ -14,4 +14,4 @@ class VenueModel(Base):
     post_no: Mapped[str] = mapped_column(String(20), nullable=True)
 
     def to_venue(self) -> Venue:
-        return Venue(self.venues_id, self.name, self.address, self.address_detail, self.post_no)
+        return Venue(venues_id=self.venues_id, name=self.name, address=self.address, address_detail=self.address_detail, post_no=self.post_no)
