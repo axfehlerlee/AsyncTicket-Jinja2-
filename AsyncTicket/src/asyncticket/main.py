@@ -17,6 +17,8 @@ from asyncticket.shared.core.models import Base, init_models
 from asyncticket.shared.domain.catalog import CatalogAuthenticator, CatalogPolicy
 from asyncticket.shared.presentation.catalog_http import register_catalog_errors
 from asyncticket.shows.presentation.router import router as show_router
+from asyncticket.wiring import wire_dependencies
+from asyncticket.venues.presentation.routers.v1.router import router as venue_router
 
 # auth_router, users_router는 FastAPI 앱에 등록할 라우터
 from asyncticket.auth.presentation.routers.v1.router import (
