@@ -1,5 +1,9 @@
 from asyncticket.venues.domain.repository import VenueRepository
 from asyncticket.venues.domain.venue import Venue
+from asyncticket.shared.core.exceptions import (
+    ConflictException,
+    NotFoundException,
+)
 
 
 class VenueService:
@@ -10,7 +14,9 @@ class VenueService:
         self, name: str, address: str, address_detail: str, post_no: str
     ) -> Venue:
         if await self.repo.find_by_post_no(None, post_no):
-            raise ValueError("이미 사용중인 공연장입니다.")
+            raise ConflictException(
+                "이미 사용중인 공연장입니다.", error_code="VENUE_ALREADY_EXISTS"
+            )
 
         venue = Venue.create(
             name=name, address=address, address_detail=address_detail, post_no=post_no
@@ -26,13 +32,17 @@ class VenueService:
         venue = await self.repo.find_by_id(venues_id)
 
         if venue is None:
-            raise ValueError("수정할 공연장이 없습니다.")
+            raise NotFoundException(
+                "수정할 공연장이 없습니다.", error_code="VENUE_NOT_FOUND"
+            )
 
         post_no = changes.get("post_no", venue.post_no)
 
         if post_no != venue.post_no:
             if await self.repo.find_by_post_no(venues_id, post_no):
-                raise ValueError("이미 사용중인 공연장입니다.")
+                raise ConflictException(
+                    "이미 사용중인 공연장입니다.", error_code="VENUE_ALREADY_EXISTS"
+                )
 
         venue.update_info(
             name=changes.get("name", venue.name),
@@ -43,8 +53,16 @@ class VenueService:
 
         return await self.repo.save(venue)
 
-    async def get_venue(self, venues_id: int) -> Venue | None:
-        return await self.repo.find_by_id(venues_id)
+    async def get_venue(self, venues_id: int) -> Venue:
+        venue = await self.repo.find_by_id(venues_id)
+
+        if venue is None:
+            raise NotFoundException(
+                "공연장을 찾을 수 없습니다.",
+                error_code="VENUE_NOT_FOUND",
+            )
+
+        return venue
 
     async def get_list_venue(
         self, name: str, address: str, page: int, page_size: int

@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from asyncticket.shared.core.exceptions import ValidationException
+
 
 @dataclass
 class Venue:
@@ -49,4 +51,6 @@ class Venue:
     @staticmethod
     def is_valid_name(name):
         if not name.strip():
-            raise ValueError("공연장명은 비어있을 수 없습니다.")
+            raise ValidationException(
+                field_errors={"name": ["공연장명은 비어있을 수 없습니다."]}
+            )
