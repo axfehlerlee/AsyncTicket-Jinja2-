@@ -17,6 +17,8 @@ from asyncticket.shared.core.models import Base, init_models
 from asyncticket.shared.domain.catalog import CatalogAuthenticator, CatalogPolicy
 from asyncticket.shared.presentation.catalog_http import register_catalog_errors
 from asyncticket.shows.presentation.router import router as show_router
+from asyncticket.wiring import wire_dependencies
+from asyncticket.venues.presentation.routers.v1.router import router as venue_router
 
 # 이 파일에서 사용할 로거 (로그에 "app.main"이라는 이름으로 표시됨)
 logger = get_logger("app.main")
@@ -57,9 +59,11 @@ def create_app(
     app.state.catalog_authenticator = authenticator
     app.state.catalog_policy = policy if policy is not None else CatalogPolicy()
     register_catalog_errors(app)
+    wire_dependencies(app)
     # 각 라우터에 /v1 prefix가 있으므로 앱에서 중복으로 붙이지 않는다.
     app.include_router(show_router)
     app.include_router(performance_router)
+    app.include_router(venue_router)
     return app
 
 
