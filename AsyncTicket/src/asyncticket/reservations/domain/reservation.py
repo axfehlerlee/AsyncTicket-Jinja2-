@@ -17,36 +17,33 @@
 
 """
 
+from dataclasses import dataclass
 from datetime import datetime
-from domain.enums import ReservationStatus
+from decimal import Decimal # total_amount
+
+from asyncticket.reservations.domain.enums import ReservationStatus # 요구사항 1번
 
 
-# 
+@dataclass(kw_only=True) 
+# dataclass 기능 : __init__을 자동으로 만들어
+# kw_only=True : 키워드를 명시해 타입이 같은 값의 순서를 바꿔 넣는 실수를 방지
 
-# # 예매가 가진값들
-# class Reservation:
-#     def __init__(self, 
-#                 reserv_id: int, 
-#                 user_id: int, 
-#                 perf_id: int, 
-#                 total_amount: int, 
-#                 status: str):
-        
-#         self.id = reserv_id
-#         self.user_id = user_id
-#         self.perf_id = perf_id
-#         self.quantity = 1 # 1인 예매 1좌석 한정
-#         self.total_amount = total_amount
-#         self.status = status
-#         self.created_at = None #datetime.now()
-#         self.confirmed_at = None
-#         self.canceled_at = None
+class Reservation:
+    """예매 엔티티 (애그리거트 루트)"""
 
+    # 값이 반드시 있어야 하는 필드
+    user_id: int
+    perf_id: int
+    order_number: str
+    total_amount: Decimal
+    status: ReservationStatus
 
-    # @classmethod
-    # # 예매 생성 규칙
-    # def create(self, reserv_id: int, user_id: int, perf_id: int, ):
-    #     NotImplementedError
+    # 기본값이 있는 필드
+    quantity: int = 1 # 요구사항 3 : 1건 = 1좌석
+    reserv_id: int | None = None # DB 저장 전에만 None 저장 후에는 항상 값이 있
 
-    # # 예매 취소 규칙
-    
+    # 일시 
+    created_at: datetime | None=None # DB에 저장되기 전에는 생성일이 없다
+    confirmed_at: datetime | None=None
+    canceled_at: datetime | None=None
+
