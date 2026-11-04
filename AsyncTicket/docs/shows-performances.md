@@ -156,7 +156,9 @@ uv run --frozen uvicorn asyncticket.main:app --host 127.0.0.1 --port 8000
 별도 `shared_core`·`seat_queries` 테스트는 `httpx`가 설치된 테스트 환경이 필요하다.
 루트 discover는 이 하위 폴더를 자동 수집하지 않으므로 각각 실행한다.
 
-`/docs`에 10개 작업이 표시된다. 실제 데이터 요청에는 PostgreSQL의 명세 테이블과
+공연·공연회차의 작업은 10개이며, 공용 `/docs`에는 다른 도메인의 작업도 함께 표시될 수 있다.
+OpenAPI 테스트는 추가 도메인의 라우트가 있는 상태에서도 공연·회차의 경로·메서드 10개와
+해당 응답 계약을 정확히 검사한다. 실제 데이터 요청에는 PostgreSQL의 명세 테이블과
 공통 인증 연결이 필요하다. DB 설정은 기존 `shared/core/database.py`의 환경 변수 규칙을 따른다.
 현재 공용 lifespan은 서버 기동 시 init_models와 create_all을 실행한다.
 이번 응답 전환은 그 절차를 변경하지 않는다. DB 작업 없는 문서/입력 검사를 할 때는
@@ -176,7 +178,8 @@ PostgreSQL DDL 컴파일 검사는 실제 DB 적용·동시성·부하 검증이
 - 공연장 ORM 관계 수정의 팀 반영, 기존 PostgreSQL의 reserv_id nullable 변경은 별도 확인한다.
 - 팀 dev의 `VenuesModel.shows = relationship("Shows", back_populates="venues")`는
   실제 모델 이름·역방향 속성과 맞지 않아 전체 `configure_mappers()`가 실패한다.
-  공연·회차 API 테스트 통과와 별개로 공연장 관계 수정 후 전체 ORM 초기화를 확인해야 한다.
+  PR #33의 관계 제거와 함께 적용한 검증 소스에서는 9모델 ORM 초기화와 PostgreSQL DDL 컴파일이
+  통과했다. 아직 병합 전이므로 팀 반영 후 실제 PostgreSQL 초기화를 별도로 확인해야 한다.
 - 전체 메타데이터 DDL 통합 검증이 필요하다. 연결 조회용 Core 컬럼
   선언은 실제 테이블 조회 계약이며 대체 ORM 모델 또는 테이블 생성 코드가 아니다.
 - 이번 응답 전환은 의존성/lockfile·테이블 모델·DB 데이터를 변경하지 않는다.

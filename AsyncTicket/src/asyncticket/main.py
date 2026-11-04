@@ -6,6 +6,8 @@ from typing import AsyncIterator
 
 from fastapi import FastAPI
 
+from asyncticket.wiring import wire_dependencies
+
 from asyncticket.performances.presentation.router import router as performance_router
 # engine: DB 연결(커넥션 풀) / close_db: 서버 종료 시 커넥션 풀 정리
 from asyncticket.shared.core.database import close_db, engine
@@ -18,7 +20,6 @@ from asyncticket.shared.core.models import Base, init_models
 from asyncticket.shared.domain.catalog import CatalogAuthenticator, CatalogPolicy
 from asyncticket.shared.presentation.catalog_http import register_catalog_errors
 from asyncticket.shows.presentation.router import router as show_router
-from asyncticket.wiring import wire_dependencies
 
 # 이 파일에서 사용할 로거 (로그에 "app.main"이라는 이름으로 표시됨)
 logger = get_logger("app.main")

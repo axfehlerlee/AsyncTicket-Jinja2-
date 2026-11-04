@@ -326,15 +326,22 @@ class CatalogApiTests(unittest.IsolatedAsyncioTestCase):
                         self.assertFalse(any(name.split(".")[0] in ("fastapi", "sqlalchemy", "pydantic") for name in imports), path)
 
     async def test_openapi_matches_all_ten_operations(self) -> None:
+        # Other domains may register routes on the same shared app.
+        self.app.add_api_route("/v1/other-domain", lambda: {"items": []}, methods=["GET"])
         status, body = await asgi_get(self.app, "/openapi.json")
         self.assertEqual(status, 200)
-        self.assertEqual(set(body["paths"]), {
+        catalog_paths = {
+            path: operations for path, operations in body["paths"].items()
+            if path.startswith(("/v1/shows", "/v1/performances"))
+        }
+        self.assertIn("/v1/other-domain", body["paths"])
+        self.assertEqual(set(catalog_paths), {
             "/v1/shows", "/v1/shows/{show_id}",
             "/v1/shows/{show_id}/performances", "/v1/performances/{perf_id}",
         })
-        self.assertEqual(sum(len(operations) for operations in body["paths"].values()), 10)
+        self.assertEqual(sum(len(operations) for operations in catalog_paths.values()), 10)
         self.assertEqual(
-            {(method, path) for path, operations in body["paths"].items() for method in operations},
+            {(method, path) for path, operations in catalog_paths.items() for method in operations},
             {
                 ("get", "/v1/shows"), ("post", "/v1/shows"),
                 ("get", "/v1/shows/{show_id}"), ("patch", "/v1/shows/{show_id}"),
@@ -613,6 +620,7 @@ class CatalogApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await asgi_get(self.app, "/v1/performances/11"))[1]["status"], "SCHEDULED")
 
     async def test_openapi_declares_common_success_errors_and_bodyless_deletes(self) -> None:
+        self.app.add_api_route("/v1/other-domain", lambda: {"items": []}, methods=["GET"])
         _, schema = await asgi_get(self.app, "/openapi.json")
         components = schema["components"]["schemas"]
         data_types = {
@@ -626,6 +634,8 @@ class CatalogApiTests(unittest.IsolatedAsyncioTestCase):
             ("/v1/performances/{perf_id}", "patch"): "PerformanceResponse",
         }
         for path, operations in schema["paths"].items():
+            if not path.startswith(("/v1/shows", "/v1/performances")):
+                continue
             for method, operation in operations.items():
                 responses = operation["responses"]
                 if method == "delete":
