@@ -4,12 +4,14 @@
 
 1. 예매는 2가지 상태로 관리 
     - 예매확정(CONFIRMED), 예매취소(CANCELED)
+    -  PENDING(결제 대기)과 EXPIRED(만료)를 추가로 관리할지 논의가 필요
 2. 예매는 결제가 성공했을 때만 생성되며, 생성되면 바로 예매확정(CONFIRMED)
 3. 예매 1건에는 좌석 1개만 예매할 수 있다 (quantity = 1)
 4. 예매 금액은 좌석 등급의 가격으로 정하고, 0원보다 커야한다 -> 좌석에서 정하는것?
 5. 한 회원은 한 회차에 예매확정(CONFIRMED) 예매를 1건만 가질 수 있다
     - 예매를 취소하면 다시 예매할 수 있다
 6. 예매 취소
+    - 본인만 취소하고 예매할 수 있
     - 예매확정(CONFIRMED) 상태에서만 가능
     - 공연 시작 전까지만 취소할 수 있다
     - 취소하면 예매 상태는 예매취소(CANCELED)가 되고 취소 일 기록(null -> date생성)
@@ -23,7 +25,6 @@ from decimal import Decimal # total_amount
 
 from asyncticket.reservations.domain.enums import ReservationStatus # 요구사항 1번
 
-
 # 0. 예매 예외
 class ReservationError(Exception) :
     """예매 도메인 예외의 공통 부모"""
@@ -34,6 +35,13 @@ class ReservationError(Exception) :
 
 class ReservationValidationError(ReservationError):
     """값이 예매 규칙에 맞지 않음(요구사항 3,4)"""
+
+class ReservationForbiddenError(ReservationError):
+    """본인 예매가 아님(요구사항 6)"""
+
+class ReservationConflictError(ReservationError):
+    """확정된 예매가 아닐때, 공연이 시작된 이후일때 (요구사항 6)"""
+
 
 # 1. VO (Value Object)
 @dataclass(frozen=True, kw_only=True)
@@ -126,3 +134,35 @@ class Reservation:
             status=ReservationStatus.CONFIRMED,
             confirmed_at=now
         )
+
+    # 5) 본인 확인 (요구사항 6 : 본인만 취소, 본인 예매만 조회)
+    def is_owned(self, person_id: int) -> bool:
+        return self.person.reservation_person_id == person_id
+
+    # 6) 예매 취소 (요구사항 6)
+    def cancel(self, person_id:int, now: datetime) -> None:
+
+        # 1) 본인만 취소할 수 있다
+        if not self.is_owned(person_id):
+            raise ReservationForbiddenError(
+                message="본인의 예매만 취소할 수 있습니다",
+                error_code="RESERVATION_FORBIDDEN"
+            )
+
+        # 2) 예매확정(CONFIRMED) 상태에서만 가능
+        if self.status != ReservationStatus.CONFIRMED :
+            raise ReservationConflictError(
+                message="확정된 예매만 취소할 수 있습니다",
+                error_code="RESERVATION_NOT_CANCELABLE"
+            )
+
+        # 3) 공연 시작 전까지만 취소할 수 있다
+        if now >= self.performance.starts_at:
+            raise ReservationConflictError(
+                message="공연이 시작된 이후에는 취소할 수 없습니다",
+                error_code="PERFORMANCE_ALREADY_STARTED"
+            )
+
+        # 4) 취소하면 예매 상태는 예매취소(CANCELED)가 되고 취소 일 기록(null -> date생성)
+        self.status = ReservationStatus.CANCELED
+        self.canceled_at = now
