@@ -9,7 +9,7 @@ DB 연결(database.py)·로거(logger.py)는 교체하지 않았다.
 - shared/core/exceptions.py: 튜터 SharedException 및 400/401/403/404/409/422 예외 원문.
 - shared/core/exception_handlers.py: 튜터 업무 예외·요청 검증 오류·미처리 오류 처리기 원문.
 - 공통 ORM 모델과 DateTimeBase는 이 PR 범위에 포함하지 않는다.
-- container.py: 튜터의 공용 wire_dependencies 진입점에 기존 좌석 DI 연결을 보존.
+- wiring/__init__.py·wiring/seats.py: 튜터의 공용 wire_dependencies 진입점에 기존 좌석 DI 연결을 보존.
 - main.py: 이 PR에서는 수정하지 않는다. 기존 공연·회차 처리기는 그대로 유지한다.
 
 튜터 자료의 shared.core import는 asyncticket.shared.core로 변경했다.

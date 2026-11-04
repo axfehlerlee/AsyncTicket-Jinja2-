@@ -12,7 +12,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import BigInteger, Column, MetaData, Table, insert, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from asyncticket.seats.container import wire_dependencies
+from asyncticket.wiring.seats import wire_dependencies
 from asyncticket.seats.infrastructure.models import PerformanceSeats, SeatsInfoModel
 from asyncticket.seats.infrastructure.repositories import SqlAlchemySeatRepository
 from fastapi import FastAPI
