@@ -24,9 +24,7 @@ def wire_dependencies(
         return SqlAlchemyVenueRepository(session)
 
     def create_venue_service(
-        repository: Annotated[
-            VenueRepository, Depends(create_venue_repository)
-        ],
+        repository: Annotated[VenueRepository, Depends(create_venue_repository)],
     ) -> VenueService:
         return VenueService(repository)
 

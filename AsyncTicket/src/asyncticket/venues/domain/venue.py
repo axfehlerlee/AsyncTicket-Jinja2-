@@ -6,7 +6,7 @@ class Venue:
     """
     공연장 정보를 관리하는 도메인 클래스입니다.
     """
-    
+
     name: str
     address: str
     address_detail: str
@@ -50,4 +50,3 @@ class Venue:
     def is_valid_name(name):
         if not name.strip():
             raise ValueError("공연장명은 비어있을 수 없습니다.")
-

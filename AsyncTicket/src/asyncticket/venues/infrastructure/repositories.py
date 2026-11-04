@@ -14,35 +14,42 @@ class SqlAlchemyVenueRepository(VenueRepository):
         venue_model = await self.session.scalar(stmt)
         return venue_model.to_venue() if venue_model else None
 
-
     async def find_by_post_no(
         self,
         venues_id: int | None,
         post_no: str,
     ) -> Venue | None:
-        stmt = select(VenueModel).where(
-            VenueModel.post_no == post_no
-        )
+        stmt = select(VenueModel).where(VenueModel.post_no == post_no)
 
         if venues_id is not None:
             stmt = stmt.where(VenueModel.venues_id != venues_id)
 
         venue_model = await self.session.scalar(stmt)
         return venue_model.to_venue() if venue_model is not None else None
-        
 
     async def find_by_filters(self, name, address, page, page_size) -> list[Venue]:
-        stmt = (select(VenueModel).where(VenueModel.name.contains(name), func.concat(VenueModel.address, func.coalesce(VenueModel.address_detail, "")).contains(address))
-        .limit(page_size)
-        .offset((page - 1) * page_size)
-        .order_by(VenueModel.name)
+        stmt = select(VenueModel)
+
+        if name is not None:
+            stmt = stmt.where(VenueModel.name.contains(name))
+
+        if address is not None:
+            stmt = stmt.where(
+                func.concat(
+                    VenueModel.address, func.coalesce(VenueModel.address_detail, "")
+                ).contains(address)
+            )
+
+        stmt = (
+            stmt.limit(page_size)
+            .offset((page - 1) * page_size)
+            .order_by(VenueModel.name)
         )
 
         result = await self.session.scalars(stmt)
         models = result.all()
 
         return [model.to_venue() for model in models]
-    
 
     async def save(self, venue) -> Venue:
         # 신규 등록
@@ -51,7 +58,7 @@ class SqlAlchemyVenueRepository(VenueRepository):
                 name=venue.name,
                 address=venue.address,
                 address_detail=venue.address_detail,
-                post_no=venue.post_no
+                post_no=venue.post_no,
             )
 
             self.session.add(venue_model)
@@ -68,8 +75,5 @@ class SqlAlchemyVenueRepository(VenueRepository):
 
         await self.session.commit()
         await self.session.refresh(venue_model)
-        
+
         return venue_model.to_venue()
-
-
-    
