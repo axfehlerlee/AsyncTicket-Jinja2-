@@ -1,10 +1,12 @@
 from typing import Annotated
 from fastapi import APIRouter, Depends, status, Query
 
+from asyncticket.shared.core.schemas import APIResponse
 from asyncticket.venues.presentation.schemas import (
     SearchVenuesRequest,
     CreateVenueRequest,
     UpdateVenueRequest,
+    VenueResponse,
 )
 from asyncticket.venues.presentation.dependencies import (
     provider_venue_service,
@@ -25,9 +27,13 @@ router = APIRouter(prefix="/v1/venues", tags=["Venues"])
 async def get_venue(
     venues_id: int,
     venue_service: Annotated[VenueService, Depends(provider_venue_service)],
-):
-    result = await venue_service.get_venue(venues_id)
-    return result
+) -> APIResponse[VenueResponse]:
+    venue = await venue_service.get_venue(venues_id)
+
+    return APIResponse[VenueResponse].ok(
+        data=VenueResponse.model_validate(venue),
+        message="공연장 조회에 성공했습니다.",
+    )
 
 
 @router.get(
@@ -39,11 +45,15 @@ async def get_venue(
 async def get_venue(
     request: Annotated[SearchVenuesRequest, Query()],
     venue_service: Annotated[VenueService, Depends(provider_venue_service)],
-):
-    result = await venue_service.get_list_venue(
+) -> APIResponse[list[VenueResponse]]:
+    venues = await venue_service.get_list_venue(
         request.name, request.address, request.page, request.page_size
     )
-    return result
+
+    return APIResponse[list[VenueResponse]].ok(
+        data=[VenueResponse.model_validate(venue) for venue in venues],
+        message="공연장 목록 조회에 성공하였습니다.",
+    )
 
 
 @router.post(
@@ -55,11 +65,14 @@ async def get_venue(
 async def create_venue(
     request: CreateVenueRequest,
     venue_service: Annotated[VenueService, Depends(provider_venue_service)],
-):
+) -> APIResponse[VenueResponse]:
     venue = await venue_service.create_venue(
         request.name, request.address, request.address_detail, request.post_no
     )
-    return venue
+    return APIResponse[VenueResponse].ok(
+        data=VenueResponse.model_validate(venue),
+        message="공연장 저장에 성공하였습니다.",
+    )
 
 
 @router.patch(
@@ -71,9 +84,15 @@ async def create_venue(
 async def update_venue(
     request: UpdateVenueRequest,
     venue_service: Annotated[VenueService, Depends(provider_venue_service)],
-):
+) -> APIResponse[VenueResponse]:
     changes = request.model_dump(
         exclude_unset=True,
         exclude={"venues_id"},
     )
-    return await venue_service.update_venue(request.venues_id, changes)
+
+    venue = await venue_service.update_venue(request.venues_id, changes)
+
+    return APIResponse[VenueResponse].ok(
+        data=VenueResponse.model_validate(venue),
+        message="공연장 수정에 성공하였습니다.",
+    )
