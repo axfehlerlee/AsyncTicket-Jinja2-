@@ -112,35 +112,3 @@ class UserModel(Base):
 
 
 
-## blacklist_token 테이블
-class BlacklistModel(Base):
-    __tablename__ = "blacklist"
-
-    black_id: Mapped[int] = mapped_column(
-        BigInteger,
-        Identity(),
-        primary_key=True,
-    )
-
-    user_id: Mapped[int] = mapped_column(
-        BigInteger,
-        ForeignKey("users.user_id"),
-        nullable=False,
-    )
-
-    jti_token: Mapped[str] = mapped_column(
-        String(500),
-        nullable=False,
-        unique=True,
-    )
-
-    expired_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-    )
-
-    created_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-        server_default=func.now(),
-    )
