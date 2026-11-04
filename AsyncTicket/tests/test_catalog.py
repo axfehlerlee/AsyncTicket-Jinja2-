@@ -14,8 +14,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import set_committed_value
 from sqlalchemy.schema import CreateTable
 
-from asyncticket.performances.presentation.dependencies import provide_performance_service
-from asyncticket.shows.presentation.dependencies import provide_show_service
+from asyncticket.wiring.performances import provide_performance_service
+from asyncticket.wiring.shows import provide_show_service
 from asyncticket.main import create_app
 from asyncticket.performances.application.service import PerformanceApplicationService
 from asyncticket.performances.infrastructure.models import PerformanceModel
@@ -321,7 +321,18 @@ class CatalogApiTests(unittest.IsolatedAsyncioTestCase):
                     imports = [node.module or "" for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)]
                     imports += [alias.name for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names]
                     self.assertFalse(any(".infrastructure" in name for name in imports), path)
-                    self.assertFalse(any(name == "asyncticket.dependencies" or name.startswith("asyncticket.wiring") for name in imports), path)
+                    if layer == "presentation":
+                        allowed_wiring = f"asyncticket.wiring.{feature}"
+                        self.assertFalse(any(
+                            name == "asyncticket.dependencies"
+                            or (name.startswith("asyncticket.wiring") and name != allowed_wiring)
+                            for name in imports
+                        ), path)
+                    else:
+                        self.assertFalse(any(
+                            name == "asyncticket.dependencies" or name.startswith("asyncticket.wiring")
+                            for name in imports
+                        ), path)
                     if layer == "domain":
                         self.assertFalse(any(name.split(".")[0] in ("fastapi", "sqlalchemy", "pydantic") for name in imports), path)
 

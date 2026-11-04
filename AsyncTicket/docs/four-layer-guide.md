@@ -22,15 +22,16 @@
 ```text
 src/asyncticket/
 ├── main.py                         # FastAPI 생성·라우터·예외 처리 등록
-├── dependencies.py                 # 기존 override import 호환 경로
-├── wiring/catalog.py               # 공연·회차의 실제 객체 생성과 주입 등록
+├── wiring/
+│   ├── shows.py                    # 공연의 서비스 주입·객체 조립
+│   └── performances.py             # 회차의 서비스 주입·객체 조립
 ├── shows/
-│   ├── presentation/               # router.py, schemas.py, dependencies.py
+│   ├── presentation/               # router.py, schemas.py
 │   ├── application/                # service.py
 │   ├── domain/                     # show.py, repositories.py
 │   └── infrastructure/             # models.py, repositories.py
 ├── performances/
-│   ├── presentation/               # router.py, schemas.py, dependencies.py
+│   ├── presentation/               # router.py, schemas.py
 │   ├── application/                # service.py
 │   ├── domain/                     # performance.py, repositories.py
 │   └── infrastructure/             # models.py, repositories.py
@@ -96,14 +97,16 @@ sequenceDiagram
 
 서비스 생성자는 실제 DB 저장소 대신 `PerformanceRepository`라는 `Protocol`을 받는다.
 Protocol은 “어떤 메서드가 필요하다”는 계약이다. 실제 구현을 정하는 곳은
-[wiring/catalog.py](../src/asyncticket/wiring/catalog.py)다.
+[wiring/shows.py](../src/asyncticket/wiring/shows.py)와
+[wiring/performances.py](../src/asyncticket/wiring/performances.py)다.
 
-각 표현 계층의 `dependencies.py`에는 `provide_show_service`,
-`provide_performance_service` 주입 계약만 둔다. 라우터는 이 계약만 참조하고,
-실제 SQLAlchemy 저장소와 서비스 생성 함수는 wiring에 둔다.
+도메인별 wiring 파일에 `provide_show_service`, `provide_performance_service` 주입 계약과
+SQLAlchemy 저장소·서비스 생성 함수를 함께 둔다. 라우터는 자신의 도메인 wiring에서
+서비스 주입 계약을 가져와 `Depends`에 전달하며, 저장소를 직접 만들지 않는다.
 `main.create_app()`이 공용 `wire_dependencies(app)`를 호출해 계약과 생성 함수를 연결한다.
 회차 쓰기와 부모 공연 소유권 조회에는 동일 요청의 DB 세션이 주입된다.
-루트 `dependencies.py`의 기존 서비스 이름은 외부 테스트 override의 호환 경로로 유지한다.
+별도 루트 또는 공연·회차 표현 계층의 의존성 파일은 사용하지 않는다.
+테스트에서 서비스를 교체할 때도 도메인별 wiring의 동일한 provider 함수를 사용한다.
 
 ```text
 응용 서비스 → 도메인의 저장소 계약

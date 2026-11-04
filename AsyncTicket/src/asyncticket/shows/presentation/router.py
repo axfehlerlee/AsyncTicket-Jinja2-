@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Path, Query, Response
 
 from asyncticket.shared.presentation.catalog_auth import get_current_catalog_actor
-from asyncticket.shows.presentation.dependencies import provide_show_service
+from asyncticket.wiring.shows import provide_show_service
 from asyncticket.shared.domain.catalog import CatalogActor
 from asyncticket.shared.core.schemas import APIResponse
 from asyncticket.shows.application.service import ShowApplicationService

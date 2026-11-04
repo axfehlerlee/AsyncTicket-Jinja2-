@@ -130,13 +130,14 @@ HTTP 전송 전 commit 보장은 별도 통합 검증 대상이다.
 
 ## 의존성 주입 구조
 
-- 공연·회차의 `presentation/dependencies.py`: 구체 구현을 만들지 않는 `provide_*_service` 계약.
-- `wiring/catalog.py`: 저장소·연결 조회·UoW·정책을 조립하고 서비스 계약에 등록.
-- `wiring/__init__.py`: 기존 좌석 바인딩을 유지하면서 공연·회차 바인딩도 등록.
+- `wiring/shows.py`: 공연의 서비스 주입 계약·저장소·연결 조회·UoW·정책 조립과 등록.
+- `wiring/performances.py`: 회차의 서비스 주입 계약·저장소·부모 공연 서비스 조립과 등록.
+- `wiring/__init__.py`: 기존 좌석·공연장 바인딩을 유지하면서 공연·회차 바인딩도 등록.
 - `main.create_app()`: 공용 wiring과 공통 예외 처리기를 등록하고 기존 라우터·인증 설정·lifespan 유지.
-- 루트 `dependencies.py`: 이전 `get_*_service` import를 위한 호환 별칭.
+- 루트 및 공연·회차 표현 계층의 별도 의존성 파일과 통합 `wiring/catalog.py`는 제거했다.
 
-공연·회차 라우터에서 wiring/인프라를 직접 import하지 않는다.
+공연·회차 라우터는 자신의 도메인 wiring의 provider를 `Depends`에 사용한다.
+인프라 저장소를 직접 import하거나 라우터에서 객체를 조립하지 않는다.
 FastAPI의 요청 단위 DB dependency 캐시를 사용하므로 부모 공연 권한 확인과 회차 변경은
 같은 세션으로 실행된다. 공용 wiring 호출이 좌석 라우터의 자동 등록을 의미하지는 않는다.
 
@@ -175,11 +176,9 @@ PostgreSQL DDL 컴파일 검사는 실제 DB 적용·동시성·부하 검증이
 
 - dev에 공통 인증 구현이 아직 없어 인증 어댑터 연결이 필요하다.
 - 팀 공용 앱의 좌석 라우터·wiring 연결과 좌석 생성 완료 확인은 별도 통합 작업이다.
-- 공연장 ORM 관계 수정의 팀 반영, 기존 PostgreSQL의 reserv_id nullable 변경은 별도 확인한다.
-- 팀 dev의 `VenuesModel.shows = relationship("Shows", back_populates="venues")`는
-  실제 모델 이름·역방향 속성과 맞지 않아 전체 `configure_mappers()`가 실패한다.
-  PR #33의 관계 제거와 함께 적용한 검증 소스에서는 9모델 ORM 초기화와 PostgreSQL DDL 컴파일이
-  통과했다. 아직 병합 전이므로 팀 반영 후 실제 PostgreSQL 초기화를 별도로 확인해야 한다.
+- 공연장 관계 수정과 공통 응답·예외 적용은 PR #33·#34로 팀 dev에 반영됐다.
+  기존 잘못된 관계 제거와 함께 적용한 소스에서 9모델 ORM 초기화·PostgreSQL DDL 컴파일을
+  통과했다. 실제 PostgreSQL 초기화와 기존 reserv_id nullable 변경은 별도로 확인한다.
 - 전체 메타데이터 DDL 통합 검증이 필요하다. 연결 조회용 Core 컬럼
   선언은 실제 테이블 조회 계약이며 대체 ORM 모델 또는 테이블 생성 코드가 아니다.
 - 이번 응답 전환은 의존성/lockfile·테이블 모델·DB 데이터를 변경하지 않는다.

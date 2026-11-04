@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Path, Query, Response
 
 from asyncticket.shared.presentation.catalog_auth import get_current_catalog_actor
-from asyncticket.performances.presentation.dependencies import provide_performance_service
+from asyncticket.wiring.performances import provide_performance_service
 from asyncticket.performances.application.service import (
     PERFORMANCE_DATE_MAX, PERFORMANCE_DATE_MIN, PerformanceApplicationService,
 )
