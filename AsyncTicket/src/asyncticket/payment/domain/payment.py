@@ -2,7 +2,7 @@
 from decimal import Decimal
 from dataclasses import dataclass
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 class PaymentStatus(str, Enum):
     FAILED = "FAIL"
@@ -60,7 +60,7 @@ class Payment:
             raise ValueError("성공 상태에는 예매 ID가 필요합니다.")
         self.status = PaymentStatus.PAID
         self.reserv_id = reserv_id
-        self.paid_at = paid_at or datetime.utcnow()
+        self.paid_at = paid_at or datetime.now(timezone.utc)
         self._validate_invariant()
 
 
@@ -74,7 +74,7 @@ class Payment:
         if self.reserv_id is None:
             raise ValueError("예매와 연결되지 않은 결제는 환불할 수 없습니다.")
         self.status = PaymentStatus.REFUNDED
-        self.refunded_at = refunded_at or datetime.utcnow()
+        self.refunded_at = refunded_at or datetime.now(timezone.utc)
         self._validate_invariant()
 
     @property
