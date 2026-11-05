@@ -8,6 +8,7 @@ from fastapi import FastAPI
 
 from asyncticket.performances.presentation.router import router as performance_router
 from asyncticket.reservations.presentation.routers.v1.router import router as reservation_router
+from asyncticket.seats.presentation.router import router as seat_router
 # engine: DB 연결(커넥션 풀) / close_db: 서버 종료 시 커넥션 풀 정리
 from asyncticket.shared.core.database import close_db, engine
 from asyncticket.shared.core.exception_handlers import register_exception_handlers
@@ -80,6 +81,7 @@ def create_app(
     # 인증/사용자 관련 라우터를 등록한다.
     app.include_router(auth_router)
     app.include_router(users_router)
+    app.include_router(seat_router)
     return app
 
 

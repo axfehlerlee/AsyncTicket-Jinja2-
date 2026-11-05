@@ -1,89 +1,243 @@
-# 응용 계층: 저장소 계약을 통해 조회·도메인 검사·저장의 순서를 조율한다.
-# 좌석의 DB 구현·API·wiring·트랜잭션 연결은 아직 작성 전이다.
+from dataclasses import replace
+from datetime import datetime, timezone
 
 from asyncticket.seats.domain.repository import (
-    SeatInfoRepository,
     PerformanceSeatRepository,
+    SeatInfoRepository,
+    SeatLookupConflictError,
 )
-from asyncticket.seats.domain.performanc_seat import PerformanceSeat
 from asyncticket.seats.domain.seat_info import SeatInfo
 from asyncticket.shared.core.exceptions import (
     ConflictException,
     NotFoundException,
+    SharedException,
 )
+from asyncticket.shared.domain.catalog import CatalogActor, CatalogPolicy
 
 
-# 좌석 등급 작업과 등급별 개별 좌석 생성을 조율한다.
 class SeatInfoService:
-    # 등급 저장소와 개별 좌석 저장소의 구현을 외부에서 전달받는다.
     def __init__(
         self,
         repository: SeatInfoRepository,
         performance_seat_repository: PerformanceSeatRepository,
-    ):
+        policy: CatalogPolicy,
+    ) -> None:
         self.repository = repository
         self.performance_seat_repository = performance_seat_repository
+        self.policy = policy
 
-    # 저장소에 좌석 등급 조회를 요청한다.
     async def get_seat_info(self, seat_id: int) -> SeatInfo:
-        return await self.repository.get_seat_info(seat_id)
+        seat_info = await self.repository.get_seat_info(seat_id)
+        if seat_info is None:
+            raise NotFoundException(
+                "좌석 등급을 찾을 수 없습니다.", error_code="SEAT_INFO_NOT_FOUND"
+            )
+        return seat_info
 
-    # 저장소에 좌석 등급 저장을 요청한다.
     async def save_seat_info(self, seat_info: SeatInfo) -> SeatInfo:
-        return await self.repository.save_seat_info(seat_info)
+        try:
+            if seat_info.seat_id is None:
+                raise ValueError(
+                    "신규 등급은 좌석명과 함께 create_seat_configuration으로 생성해야 합니다."
+                )
+            current = await self.get_seat_info(seat_info.seat_id)
+            if not await self.repository.lock_performance(current.perf_id):
+                raise NotFoundException(
+                    "회차를 찾을 수 없습니다.", error_code="PERFORMANCE_NOT_FOUND"
+                )
+            current = await self.get_seat_info(seat_info.seat_id)
+            if (seat_info.perf_id, seat_info.name, seat_info.total_seat) != (
+                current.perf_id,
+                current.name,
+                current.total_seat,
+            ):
+                raise ValueError(
+                    "기존 등급은 가격만 변경할 수 있습니다. 좌석 구성 변경은 아직 지원하지 않습니다."
+                )
+            saved_grade = await self.repository.save_seat_info(seat_info)
+            await self.repository.commit()
+            return saved_grade
+        except BaseException:
+            await self.repository.rollback()
+            raise
 
-    # 등급을 조회하고, 전달받은 점유 수로 요청 매수를 검사한다.
     async def check_seat_availability(
-        self, seat_id: int, quantity: int, occupied_count: int
+        self,
+        seat_id: int,
+        quantity: int,
+        occupied_count: int,
     ) -> None:
         seat_info = await self.get_seat_info(seat_id)
         seat_info.require_capacity(quantity, occupied_count)
 
-    # check_seat_availability와 같은 검사이며, 현재 두 메서드가 중복된다.
     async def check_capacity(
-        self, seat_id: int, quantity: int, occupied_count: int
+        self,
+        seat_id: int,
+        quantity: int,
+        occupied_count: int,
     ) -> None:
-        seat_info = await self.get_seat_info(seat_id)
-        seat_info.require_capacity(quantity, occupied_count)
+        await self.check_seat_availability(seat_id, quantity, occupied_count)
 
-    # 회차 확인·잠금 → 중복 검사 → 등급 저장 → 좌석 생성·저장 순서로 진행한다.
     async def create_seat_configuration(
         self,
         seat_info: SeatInfo,
         seat_seqs: list[str],
     ) -> SeatInfo:
-        # 회차가 없으면 저장 작업을 중단한다.
-        if not await self.repository.lock_performance(seat_info.perf_id):
+        try:
+            if seat_info.seat_id is not None:
+                raise ValueError("새 좌석 구성에는 등급 ID를 지정할 수 없습니다.")
+            seat_info.validate_seat_names(seat_seqs)
+
+            # 같은 회차의 좌석 구성 생성을 직렬화한 뒤 중복을 검사한다.
+            if not await self.repository.lock_performance(seat_info.perf_id):
+                raise NotFoundException(
+                    "회차를 찾을 수 없습니다.", error_code="PERFORMANCE_NOT_FOUND"
+                )
+            if await self.repository.grade_exists(seat_info.perf_id, seat_info.name):
+                raise ConflictException("같은 회차에 이미 등록된 좌석 등급입니다.")
+            if await self.performance_seat_repository.names_exist(
+                seat_info.perf_id, seat_seqs
+            ):
+                raise ConflictException("같은 회차에 이미 등록된 좌석명입니다.")
+
+            saved_grade = await self.repository.save_seat_info(seat_info)
+            await self.performance_seat_repository.save_many(
+                saved_grade.create_seats(seat_seqs)
+            )
+            await self.repository.commit()
+            return saved_grade
+        except BaseException:
+            await self.repository.rollback()
+            raise
+
+    async def _authorize(self, perf_id: int, actor: CatalogActor) -> None:
+        self.policy.authorize(actor)
+        if not await self.repository.lock_performance(perf_id):
             raise NotFoundException(
-                "회차를 찾을 수 없습니다.",
-                error_code="PERFORMANCE_NOT_FOUND",
+                "공연 회차를 찾을 수 없습니다.", error_code="PERFORMANCE_NOT_FOUND"
+            )
+        context = await self.repository.get_management_context(perf_id)
+        if context is None:
+            raise NotFoundException(
+                "공연 회차를 찾을 수 없습니다.", error_code="PERFORMANCE_NOT_FOUND"
+            )
+        owner_id = context["owner_id"]
+        if type(owner_id) is not int or owner_id <= 0:
+            raise SharedException(
+                "공연 소유자 설정을 확인해야 합니다.",
+                status_code=503,
+                error_code="INVALID_SHOW_OWNER",
+            )
+        self.policy.authorize(actor, owner_id)
+        booking_opens_at = context["booking_opens_at"]
+        if not isinstance(booking_opens_at, datetime) or booking_opens_at.utcoffset() is None:
+            raise SharedException(
+                "회차 판매 시각 설정을 확인해야 합니다.",
+                status_code=503,
+                error_code="INVALID_BOOKING_TIME",
+            )
+        # 판매 시작 후 구성·가격 변경은 이 API에서 지원하지 않는다.
+        if datetime.now(timezone.utc) >= booking_opens_at:
+            raise ConflictException(
+                "판매 시작 후 좌석 구성을 변경할 수 없습니다.",
+                error_code="SEAT_SALE_STARTED",
             )
 
-        # 같은 회차의 등급명 중복을 거절한다.
-        if await self.repository.grade_exists(seat_info.perf_id, seat_info.name):
-            raise ConflictException("같은 회차에 이미 등록된 좌석 등급입니다.")
+    async def create(
+        self,
+        seat_info: SeatInfo,
+        seat_seqs: list[str],
+        actor: CatalogActor,
+    ) -> SeatInfo:
+        try:
+            await self._authorize(seat_info.perf_id, actor)
+            return await self.create_seat_configuration(seat_info, seat_seqs)
+        except BaseException:
+            await self.repository.rollback()
+            raise
 
-        # 같은 회차의 좌석명 중복을 거절한다.
-        if await self.performance_seat_repository.names_exist(
-            seat_info.perf_id, seat_seqs
-        ):
-            raise ConflictException("같은 회차에 이미 등록된 좌석명입니다.")
+    async def update_price(
+        self,
+        perf_id: int,
+        seat_id: int,
+        price: int,
+        actor: CatalogActor,
+    ) -> SeatInfo:
+        try:
+            await self._authorize(perf_id, actor)
+            current = await self.get_seat_info(seat_id)
+            if current.perf_id != perf_id:
+                raise NotFoundException(
+                    "해당 회차의 좌석 등급을 찾을 수 없습니다.",
+                    error_code="SEAT_INFO_NOT_FOUND",
+                )
+            return await self.save_seat_info(replace(current, price=price))
+        except BaseException:
+            await self.repository.rollback()
+            raise
 
-        # 저장소에서 ID를 받은 뒤, 그 ID에 속한 개별 좌석을 만든다.
-        saved_grade = await self.repository.save_seat_info(seat_info)
 
-        seats = saved_grade.create_seats(seat_seqs)
-
-        # 생성한 좌석 목록을 저장소에 전달한다.
-        await self.performance_seat_repository.save_many(seats)
-
-        return saved_grade
-
-
-# 개별 좌석 목록 저장을 저장소에 요청한다.
 class PerformanceSeatService:
-    def __init__(self, repository: PerformanceSeatRepository):
+    def __init__(
+        self,
+        repository: PerformanceSeatRepository,
+        seat_info_repository: SeatInfoRepository,
+    ) -> None:
         self.repository = repository
+        self.seat_info_repository = seat_info_repository
 
-    async def save_many(self, seats: list[PerformanceSeat]) -> None:
-        await self.repository.save_many(seats)
+    async def _require_performance(self, perf_id: int) -> None:
+        if not await self.seat_info_repository.performance_exists(perf_id):
+            raise NotFoundException(
+                "공연 회차를 찾을 수 없습니다.", error_code="PERFORMANCE_NOT_FOUND"
+            )
+
+    async def list_performance_seats(self, perf_id: int) -> list[dict[str, object]]:
+        await self._require_performance(perf_id)
+        return await self.repository.list_performance_seats(perf_id)
+
+    async def get_seat_info(self, perf_id: int, seat_id: int) -> dict[str, object]:
+        grade = await self.seat_info_repository.get_seat_info_view(perf_id, seat_id)
+        if grade is None:
+            raise NotFoundException(
+                "해당 회차의 좌석 등급을 찾을 수 없습니다.",
+                error_code="SEAT_INFO_NOT_FOUND",
+            )
+        return grade
+
+    async def get_performance_seat(
+        self, perf_id: int, seat_seq: str
+    ) -> dict[str, object]:
+        await self._require_performance(perf_id)
+        try:
+            seat = await self.repository.get_performance_seat(perf_id, seat_seq)
+        except SeatLookupConflictError as exc:
+            raise SharedException(
+                "좌석 정보를 확인할 수 없습니다.",
+                status_code=500,
+                error_code="SEAT_LOOKUP_INTEGRITY_ERROR",
+            ) from exc
+        if seat is None:
+            raise NotFoundException(
+                "해당 회차의 좌석을 찾을 수 없습니다.", error_code="SEAT_NOT_FOUND"
+            )
+        return seat
+
+    async def get_reservation_seats(
+        self, reserv_id: int, user_id: int
+    ) -> dict[str, object]:
+        try:
+            reservation = await self.repository.get_owned_reservation_seats(
+                reserv_id, user_id
+            )
+        except SeatLookupConflictError as exc:
+            raise SharedException(
+                "예매 좌석 정보를 확인할 수 없습니다.",
+                status_code=500,
+                error_code="RESERVATION_SEAT_INTEGRITY_ERROR",
+            ) from exc
+        if reservation is None:
+            raise NotFoundException(
+                "예매 좌석을 찾을 수 없습니다.", error_code="RESERVATION_NOT_FOUND"
+            )
+        return reservation

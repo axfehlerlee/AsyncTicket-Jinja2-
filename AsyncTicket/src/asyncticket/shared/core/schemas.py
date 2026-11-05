@@ -3,9 +3,6 @@ from typing import Any, Generic, TypeVar
 from pydantic import BaseModel, ConfigDict, Field
 
 T = TypeVar("T")
-# T가 “담을 데이터 형식의 자리”를 나타내는 타입 변수임
-# (예: APIResponse[int]는 data가 int형임)
-# 예시: from asyncticket.shared.core.schemas import APIResponse
 
 
 class APIResponse(BaseModel, Generic[T]):
