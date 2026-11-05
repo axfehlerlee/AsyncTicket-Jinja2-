@@ -189,3 +189,15 @@ PostgreSQL DDL 컴파일 검사는 실제 DB 적용·동시성·부하 검증이
 - 전체 메타데이터 DDL 통합 검증이 필요하다. 연결 조회용 Core 컬럼
   선언은 실제 테이블 조회 계약이며 대체 ORM 모델 또는 테이블 생성 코드가 아니다.
 - 이번 응답 전환은 의존성/lockfile·테이블 모델·DB 데이터를 변경하지 않는다.
+
+
+### 공통 JWT 인증 연결
+
+기본 앱은 `wiring/catalog_auth.py`에서 공연·회차 인증을 공통
+`AuthApplicationService.authenticate()`에 연결한다. `/v1/auth/login`에서
+받은 access token을 `Authorization: Bearer <token>`으로 전달한다.
+서명·만료·블랙리스트·탈퇴 여부를 검증하고 DB의 현재 사용자 ID와 역할로
+공연·회차 소유권 정책을 적용한다. `JWT_SECRET_KEY`는 환경 변수로 설정한다.
+토큰 없는 요청은 401, JWT 설정 누락은 503이며 공개 조회와 앱 생성에는
+JWT 설정이 필요하지 않다. `create_app(authenticator=...)`로 명시한
+인증기는 계속 우선 적용한다.

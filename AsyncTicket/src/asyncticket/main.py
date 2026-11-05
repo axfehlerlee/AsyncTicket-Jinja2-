@@ -22,6 +22,13 @@ from asyncticket.shows.presentation.router import router as show_router
 from asyncticket.wiring import wire_dependencies
 from asyncticket.venues.presentation.routers.v1.router import router as venue_router
 
+# auth_router, users_router는 FastAPI 앱에 등록할 라우터
+from asyncticket.auth.presentation.routers.v1.router import (
+    router as auth_router,
+)
+from asyncticket.users.presentation.router.v1.router import (
+    router as users_router,
+)
 # 이 파일에서 사용할 로거 (로그에 "app.main"이라는 이름으로 표시됨)
 logger = get_logger("app.main")
 
@@ -57,7 +64,7 @@ def create_app(
         version="1.0.0",
         lifespan=lifespan,
     )
-    # 앱마다 설정을 분리한다. 실제 인증 어댑터가 없으면 기존 401/503 정책을 따른다.
+    # 앱마다 설정을 분리한다. 인증기 미지정 시 wiring에서 공통 JWT 인증을 연결한다.
     app.state.catalog_authenticator = authenticator
     app.state.catalog_policy = policy if policy is not None else CatalogPolicy()
     register_exception_handlers(app)
@@ -66,8 +73,13 @@ def create_app(
     # 각 라우터에 /v1 prefix가 있으므로 앱에서 중복으로 붙이지 않는다.
     app.include_router(show_router)
     app.include_router(performance_router)
+
     app.include_router(venue_router)
     app.include_router(reservation_router)
+
+    # 인증/사용자 관련 라우터를 등록한다.
+    app.include_router(auth_router)
+    app.include_router(users_router)
     return app
 
 

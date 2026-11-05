@@ -6,19 +6,22 @@ from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from asyncticket.shared.domain.catalog import (
-    AuthenticationRequiredError, CatalogActor, CatalogIntegrationError,
+    AuthenticationRequiredError, CatalogActor, CatalogAuthenticator, CatalogIntegrationError,
 )
 
 bearer = HTTPBearer(auto_error=False)
 
 
+def provide_catalog_authenticator(request: Request) -> CatalogAuthenticator | None:
+    return request.app.state.catalog_authenticator
+
+
 async def get_current_catalog_actor(
-    request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
+    authenticator: Annotated[CatalogAuthenticator | None, Depends(provide_catalog_authenticator)],
 ) -> CatalogActor:
     if credentials is None:
         raise AuthenticationRequiredError("로그인이 필요합니다.")
-    authenticator = request.app.state.catalog_authenticator
     if authenticator is None:
         # 인증 코드가 없다고 user_id 헤더나 서명 미검증 JWT를 신뢰하지 않는다.
         raise CatalogIntegrationError("공통 인증 모듈 연결이 필요합니다.")
