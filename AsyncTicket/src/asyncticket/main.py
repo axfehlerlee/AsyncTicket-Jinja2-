@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from asyncticket.performances.presentation.router import router as performance_router
 # engine: DB 연결(커넥션 풀) / close_db: 서버 종료 시 커넥션 풀 정리
 from asyncticket.shared.core.database import close_db, engine
+from asyncticket.shared.core.exception_handlers import register_exception_handlers
 # 공용 로거 생성 함수
 from asyncticket.shared.core.logger import get_logger
 # Base : 모든 모델의 부모, 등록된 테이블 정보(metadata)를 가짐
@@ -58,6 +59,7 @@ def create_app(
     # 앱마다 설정을 분리한다. 실제 인증 어댑터가 없으면 기존 401/503 정책을 따른다.
     app.state.catalog_authenticator = authenticator
     app.state.catalog_policy = policy if policy is not None else CatalogPolicy()
+    register_exception_handlers(app)
     register_catalog_errors(app)
     wire_dependencies(app)
     # 각 라우터에 /v1 prefix가 있으므로 앱에서 중복으로 붙이지 않는다.

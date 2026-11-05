@@ -1,12 +1,10 @@
-"""앱 조립: 같은 요청의 DB 세션·저장소·서비스·트랜잭션을 연결한다."""
+"""공연 서비스의 주입 계약과 실제 객체 조립을 한곳에서 관리한다."""
 
 from typing import Annotated
 
-from fastapi import Depends, Request
+from fastapi import Depends, FastAPI, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from asyncticket.performances.application.service import PerformanceApplicationService
-from asyncticket.performances.infrastructure.repositories import SqlAlchemyPerformanceRepository
 from asyncticket.shared.core.database import get_db
 from asyncticket.shared.domain.catalog import CatalogPolicy
 from asyncticket.shared.infrastructure.catalog import (
@@ -18,11 +16,15 @@ from asyncticket.shows.infrastructure.repositories import SqlAlchemyShowReposito
 DatabaseSession = Annotated[AsyncSession, Depends(get_db)]
 
 
+def provide_show_service() -> ShowApplicationService:
+    raise NotImplementedError("ShowApplicationService 의존성이 주입되지 않았습니다.")
+
+
 def get_catalog_policy(request: Request) -> CatalogPolicy:
     return request.app.state.catalog_policy
 
 
-def get_show_service(
+def create_show_service(
     session: DatabaseSession, policy: Annotated[CatalogPolicy, Depends(get_catalog_policy)],
 ) -> ShowApplicationService:
     return ShowApplicationService(
@@ -31,13 +33,5 @@ def get_show_service(
     )
 
 
-def get_performance_service(
-    session: DatabaseSession,
-    show_service: Annotated[ShowApplicationService, Depends(get_show_service)],
-    policy: Annotated[CatalogPolicy, Depends(get_catalog_policy)],
-) -> PerformanceApplicationService:
-    # 공연 소유권 확인과 회차 쓰기가 같은 세션/트랜잭션에서 실행된다.
-    return PerformanceApplicationService(
-        SqlAlchemyPerformanceRepository(session), show_service,
-        SqlAlchemyCatalogRelations(session), SqlAlchemyCatalogUnitOfWork(session), policy,
-    )
+def wire_dependencies(app: FastAPI) -> None:
+    app.dependency_overrides[provide_show_service] = create_show_service
