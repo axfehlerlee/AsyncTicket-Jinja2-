@@ -23,6 +23,7 @@
 src/asyncticket/
 ├── main.py                         # FastAPI 생성·라우터·예외 처리 등록
 ├── wiring/
+│   ├── common.py                   # 공연·회차 공통 요청 세션·정책 주입
 │   ├── shows.py                    # 공연의 서비스 주입·객체 조립
 │   └── performances.py             # 회차의 서비스 주입·객체 조립
 ├── shows/
@@ -32,7 +33,7 @@ src/asyncticket/
 │   └── infrastructure/             # models.py, repositories.py
 ├── performances/
 │   ├── presentation/               # router.py, schemas.py
-│   ├── application/                # service.py
+│   ├── application/                # service.py, ports.py(공연 접근 계약)
 │   ├── domain/                     # performance.py, repositories.py
 │   └── infrastructure/             # models.py, repositories.py
 └── shared/
@@ -105,6 +106,8 @@ SQLAlchemy 저장소·서비스 생성 함수를 함께 둔다. 라우터는 자
 서비스 주입 계약을 가져와 `Depends`에 전달하며, 저장소를 직접 만들지 않는다.
 `main.create_app()`이 공용 `wire_dependencies(app)`를 호출해 계약과 생성 함수를 연결한다.
 회차 쓰기와 부모 공연 소유권 조회에는 동일 요청의 DB 세션이 주입된다.
+`DatabaseSession`과 `get_catalog_policy`는 `wiring/common.py`에 한 번 정의하고
+공연·회차 wiring에서 가져온다. 회차 wiring은 공연 wiring에서 provider만 가져온다.
 별도 루트 또는 공연·회차 표현 계층의 의존성 파일은 사용하지 않는다.
 테스트에서 서비스를 교체할 때도 도메인별 wiring의 동일한 provider 함수를 사용한다.
 
@@ -116,7 +119,11 @@ SQLAlchemy 저장소·서비스 생성 함수를 함께 둔다. 라우터는 자
 
 라우터와 서비스에 SQL을 직접 쓰지 않아 DB 처리와 비즈니스 규칙을 따로 읽을 수 있다.
 공연회차 서비스가 공연 소유권을 확인할 때도 공연 인프라를 가져오지 않고
-공연 응용 서비스의 `authorize_owner()`를 사용한다.
+`performances/application/ports.py`의 `ShowAccess` 계약을 사용한다.
+계약은 `find_by_id()`와 `authorize_owner()` 두 메서드만 요구하며, 실제 구현으로는
+기존 공연 응용 서비스를 주입한다. 공연 서비스 전체의 생성·수정·삭제 기능에는 의존하지 않는다.
+`authorize_owner()`는 공연 행을 `FOR UPDATE`로 잠그고 소유권을 확인한다.
+이 메서드 안에서는 commit하지 않으며, 같은 요청 세션에서 회차 변경 후 commit/rollback한다.
 
 ## PATCH를 읽을 때 주의할 점
 
