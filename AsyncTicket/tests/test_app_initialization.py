@@ -31,6 +31,28 @@ class AppInitializationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNot(default_one.state.catalog_policy, default_two.state.catalog_policy)
         self.assertTrue(default_one.state.catalog_policy.admin_can_manage_all)
 
+    def test_merged_app_exposes_catalog_venue_auth_and_user_routes(self) -> None:
+        paths = main.create_app().openapi()["paths"]
+        for path in (
+            "/v1/shows", "/v1/performances/{perf_id}",
+            "/v1/venues", "/v1/auth/login", "/v1/users",
+        ):
+            with self.subTest(path=path):
+                self.assertIn(path, paths)
+        self.assertIn("post", paths["/v1/users"])
+        self.assertIn("post", paths["/v1/auth/login"])
+
+    def test_exception_registrations_and_wiring_run_once(self) -> None:
+        with (
+            patch.object(main, "register_exception_handlers") as common,
+            patch.object(main, "register_catalog_errors") as catalog,
+            patch.object(main, "wire_dependencies") as wiring,
+        ):
+            app = main.create_app()
+        common.assert_called_once_with(app)
+        catalog.assert_called_once_with(app)
+        wiring.assert_called_once_with(app)
+
     async def test_lifespan_preserves_model_and_schema_startup_then_closes_pool(self) -> None:
         connection = MagicMock()
         connection.run_sync = AsyncMock()
