@@ -1,22 +1,26 @@
-# 도메인 비즈니스 요구사항 정의하기
 """
-요구사항 정의
+<예매규칙>
+- 예매 자신의 값으로 판단할 수 있는 규칙만 담음
+- FastAPI, SQLAlchemy, 다른 도메인(회원·회차·좌석·결제)을 import하지 않음
+- 규칙에 필요한 외부 값은 VO로 전달받고, 판단은 예매가 한다
 
-1. 예매는 2가지 상태로 관리 
-    - 예매확정(CONFIRMED), 예매취소(CANCELED)
-    -  PENDING(결제 대기)과 EXPIRED(만료)를 추가로 관리할지 논의가 필요
-2. 예매는 결제가 성공했을 때만 생성되며, 생성되면 바로 예매확정(CONFIRMED)
-3. 예매 1건에는 좌석 1개만 예매할 수 있다 (quantity = 1)
-4. 예매 금액은 좌석 등급의 가격으로 정하고, 0원보다 커야한다 -> 좌석에서 정하는것?
-5. 한 회원은 한 회차에 예매확정(CONFIRMED) 예매를 1건만 가질 수 있다
-    - 예매를 취소하면 다시 예매할 수 있다
-6. 예매 취소
-    - 본인만 취소하고 예매할 수 있
-    - 예매확정(CONFIRMED) 상태에서만 가능
-    - 공연 시작 전까지만 취소할 수 있다
-    - 취소하면 예매 상태는 예매취소(CANCELED)가 되고 취소 일 기록(null -> date생성)
-7. 예매ID, 회원ID, 회차ID, 매수, 금액, 상태, 예매·확정·취소 일시를 확인할 수 있다
-
+<도메인 비즈니스 요구사항 정의>
+    1) 예매는 2가지 상태로 관리
+        - 예매확정(CONFIRMED), 예매취소(CANCELED)
+    2) 예매 생성
+        - 예매 1건에는 좌석수량 1개만 예매가능 (quantity = 1)
+        - 예매 금액은 0원보다 커야 한다
+        - 예매 기간 안에만 예매 (예매 시작일시 <= 현재(now) < 예매 마감 일시)
+        - 판매 가능한 좌석만 예매할 수 있다 (좌석 도메인 assign_reservation에서 보장)
+        - (결제후)예매가 생성되면 바로 예매확정(CONFIRMED)
+    3) 예매 조회
+        - 본인 예매만 조회
+        - 예매ID, 회원ID, 회차ID, 예매수량, 금액, 상태, 예매·확정·취소 일시를 확인할 수 있다
+    4) 예매 취소
+        - 본인 예매만 취소
+        - 예매확정(CONFIRMED) 상태에서만 취소 가능
+        - 공연 시작 전까지만 취소
+        - 취소처리되면 예매상태는 취소(CANCELED)가 되고 취소 일시를 기록한다
 """
 
 from dataclasses import dataclass
@@ -25,71 +29,75 @@ from decimal import Decimal # total_amount
 
 from asyncticket.reservations.domain.enums import ReservationStatus # 요구사항 1번
 
-# 0. 예매 예외
-class ReservationError(Exception) :
-    """예매 도메인 예외의 공통 부모"""
+# 1. 예매 예외
+class ReservationError(Exception):
+    """예매 도메인 예외의 공통부모"""
     def __init__(self, message:str, error_code:str):
         self.message = message  
         self.error_code = error_code
         super().__init__(message)
 
 class ReservationValidationError(ReservationError):
-    """값이 예매 규칙에 맞지 않음(요구사항 3,4)"""
+    """
+    값이 예매 규칙에 맞지 않을때 발생되는 오류
+    - 좌석선택을 1을 초과
+    - 금액이 0보다 작음
+    """
 
 class ReservationForbiddenError(ReservationError):
-    """본인 예매가 아님(요구사항 6)"""
+    """본인 예매가 아님을 알리는 오류"""
 
 class ReservationConflictError(ReservationError):
-    """확정된 예매가 아닐때, 공연이 시작된 이후일때 (요구사항 6)"""
+    """
+    현재 상태에서는 할수없음을 의미
+    - 예매 기간이 아님
+    - 판매된 좌석 -> 좌석 도메인이 관리!
+    - 확정된 예매가 아님
+    - 공연이 시작됨
+    """
 
-
-# 1. VO (Value Object)
+# 2. VO(Value Object)
 @dataclass(frozen=True, kw_only=True)
-class ReservationPerson:      
-    """예매자 (reservations.user_id)"""
-    reservation_person_id: int
-    reservation_person_name: str
-
-@dataclass(frozen=True, kw_only=True)
-class ReservationPerformanceInfo:
-    """예매한 회차 정보(performances, shows)"""
-    show_title: str
-    perf_id: int
-    round_number: int
-    starts_at: datetime
+class TicketHolder:
+    """예매자(users)"""
+    ticketholder_id: int      # 본인 예매만 조회/취소
+    # ticketholder_name: str  # 조회 응답에서 가져오기
 
 @dataclass(frozen=True, kw_only=True)
-class ReservationSeat:
+class ReservedPerformance:
+    """예매한 회차(performances)"""
+    reserved_perf_id: int
+    perf_starts_at: datetime   # 예매취소 : 공연 시작일 전까지
+    reserv_opens_at: datetime  # 예매생성 : 예매 시작일부터
+    reserv_closes_at: datetime # 예매생성 : 예매 마감일까지
+
+@dataclass(frozen=True, kw_only=True)
+class ReservedSeat:
     """예매한 좌석 정보 (performance_seats, seats_info)"""
-    perf_seat_id: int
-    seat_number: str | None
-    seat_grade: str
-    seat_price: int
+    reserved_seat_id: int
+    reserved_seat_price: Decimal # 예매생성 : 예매 금액 = 좌석
 
 @dataclass(frozen=True, kw_only=True)
-class ReservationPaymentInfo: 
-    """예약 결제정보 (payments)"""
-    pay_id: int | None = None
-    payment_status: str
-    paid_at: datetime | None = None 
+class ReservedPayment:
+    """예매결제 (payments)"""
+    reserved_pay_id:  int | None = None 
 
 
-# 2. 엔티티
+# 3. 엔터티
 @dataclass(kw_only=True)
 class Reservation:
-    """예매 엔티티 (애그리거트 루트)"""
-
+    """예매 엔티티 """
     # 1) VO 정보들
-    person:ReservationPerson 
-    performance:ReservationPerformanceInfo
-    seat:ReservationSeat
-    payment:ReservationPaymentInfo
+    ticketholder:TicketHolder
+    performance:ReservedPerformance
+    seat:ReservedSeat
+    payment: ReservedPayment | None = None 
 
     # 2) 예매 자신의 정보
     order_number: str
     total_amount: Decimal
     status: ReservationStatus
-    quantity: int = 1               # 요구사항 3 : 1건 = 1좌석
+    quantity: int = 1               # 1건 = 1좌석
     reserv_id: int | None = None    # DB 저장 전에만 None 저장 후에는 항상 값이 있음
     created_at: datetime | None=None # DB에 저장되기 전에는 생성일이 없다
     confirmed_at: datetime | None=None
@@ -97,53 +105,60 @@ class Reservation:
 
     # 3) 예매가 생성될 때마다 항상 검사하는 규칙 
     def __post_init__(self):
-
-        # 요구사항 3 : 예매 1건 = 좌석 1개
+        # 예매 1건 = 좌석 1개
         if self.quantity != 1 :
             raise ReservationValidationError(
                 message="예매 1건에는 좌석 1개만 예매할 수 있습니다",
                 error_code="INVALID_QUANTITY"
             )
 
-        # 요구사항 4 : 금액은 0원보다 커야한다
+        # 금액은 0원보다 커야한다
         if self.total_amount <= 0 :
             raise ReservationValidationError(
                 message="예매 금액은 0원보다 커야합니다",
                 error_code="INVALID_TOTAL_AMOUNT"
             )
 
-    # 4) 새 예매를 만드는 방법 (요구사항 2 : 생성되면 바로 CONFIRMED)
+    # 4) 새 예매를 만드는 방법
     @classmethod
     def confirm_new(
         cls,
         *, 
-        person: ReservationPerson, 
-        performance: ReservationPerformanceInfo, 
-        seat: ReservationSeat, 
-        payment: ReservationPaymentInfo,
+        ticketholder:TicketHolder, 
+        performance:ReservedPerformance, 
+        seat:ReservedSeat,
+        payment: ReservedPayment,
         order_number: str,
-        now: datetime, ) -> "Reservation" : 
-        
+        # checker: ReservationCheck,
+        now: datetime) -> "Reservation": 
+
+        # 예매생성 규칙
+        if not (performance.reserv_opens_at <= now < performance.reserv_closes_at):
+            raise ReservationConflictError(
+                message="예매 가능한 기간이 아닙니다",
+                error_code="RESERVATION_NOT_OPEN"
+            )
+
         return cls(
-            person=person,
+            ticketholder=ticketholder,
             performance=performance,
             seat=seat,
             payment=payment,
             order_number=order_number,
-            total_amount=Decimal(seat.seat_price),  # 요구사항 4 : 예매금액 = 좌석 가격
-            status=ReservationStatus.CONFIRMED,
-            confirmed_at=now
+            total_amount=seat.reserved_seat_price,
+            status=ReservationStatus.CONFIRMED, # 예매생성 후 예매확정 상태로 변경
+            confirmed_at=now                    # 확정 일시는 now로 기록
         )
 
-    # 5) 본인 확인 (요구사항 6 : 본인만 취소, 본인 예매만 조회)
-    def is_owned(self, person_id: int) -> bool:
-        return self.person.reservation_person_id == person_id
+    # 5) 본인 확인 (본인만 취소, 본인 예매만 조회)
+    def is_owned(self, ticketholder_id: int) -> bool:
+        return self.ticketholder.ticketholder_id == ticketholder_id
 
-    # 6) 예매 취소 (요구사항 6)
-    def cancel(self, person_id:int, now: datetime) -> None:
+    # 6) 예매 취소
+    def cancel(self, ticketholder_id:int, now: datetime) -> None:
 
         # 1) 본인만 취소할 수 있다
-        if not self.is_owned(person_id):
+        if not self.is_owned(ticketholder_id):
             raise ReservationForbiddenError(
                 message="본인의 예매만 취소할 수 있습니다",
                 error_code="RESERVATION_FORBIDDEN"
@@ -157,7 +172,7 @@ class Reservation:
             )
 
         # 3) 공연 시작 전까지만 취소할 수 있다
-        if now >= self.performance.starts_at:
+        if now >= self.performance.perf_starts_at:
             raise ReservationConflictError(
                 message="공연이 시작된 이후에는 취소할 수 없습니다",
                 error_code="PERFORMANCE_ALREADY_STARTED"
