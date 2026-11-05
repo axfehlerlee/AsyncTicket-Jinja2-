@@ -18,7 +18,7 @@ class Payment(Base):
     pay_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     # 성공한 결제에만 연결. 실패 시 NULL (성공 후 예매 원칙)
     # 결제가 성공해야 예매가 생긴다. 실패한 결제는 예매가 없는데 nullable=False는 문제를 불러일으킨다. => nullable=True로 수정.
-    reserv_id: Mapped[int] = mapped_column(
+    reserv_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("reservations.reserv_id"), nullable=True, index=True
     )
     # 외부 결제사 연동 보류로 인한 transaction_ref 제외 처리 
@@ -30,8 +30,9 @@ class Payment(Base):
     # 성공 / 실패 / 환불. 취소 결과는 환불로 기록
     status: Mapped[str] = mapped_column(String(30), nullable=False)
     # 결제 시도 생성 시각 (UTC)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False,     default=lambda: datetime.now(timezone.utc),
-)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
     # 성공 상태로 바뀐 시각 (인프라 기록)
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # 환불 상태로 바뀐 시각 (인프라 기록)

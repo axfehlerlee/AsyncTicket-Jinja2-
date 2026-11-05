@@ -19,7 +19,7 @@ class PaymentService:
         payment = await self.repository.find_by_id(pay_id)
         if payment is None:
             raise NotFoundException(
-                "결제를 찾을 수 없습니다.", error_code = "PAYMEN_NOT_FOUND"
+                "결제를 찾을 수 없습니다.", error_code = "PAYMENT_NOT_FOUND"
             )
         return payment
 

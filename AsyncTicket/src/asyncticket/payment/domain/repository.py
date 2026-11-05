@@ -15,5 +15,6 @@ class PaymentRepository(ABC):
 
     @abstractmethod
     async def save(self, payment: Payment) -> None:
-        """결제 상태를 저장한다. commit은 응용 계층이 한다."""
+        """결제 상태를 저장한다. 새 결제면 받은 pay_id·created_at을 payment에 채운다.
+        commit은 요청 세션(get_db)이 끝날 때 한다."""
         raise NotImplementedError
