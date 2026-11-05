@@ -35,12 +35,3 @@ class PatchRequest(BaseModel):
             if getattr(self, name) is None:
                 raise ValueError(f"{name}에는 null을 지정할 수 없습니다.")
         return self
-
-
-class ErrorDetail(BaseModel):
-    code: str
-    message: str
-
-
-class ErrorResponse(BaseModel):
-    detail: ErrorDetail

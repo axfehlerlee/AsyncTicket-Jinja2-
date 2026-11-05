@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from asyncticket.performances.presentation.router import router as performance_router
 # engine: DB 연결(커넥션 풀) / close_db: 서버 종료 시 커넥션 풀 정리
 from asyncticket.shared.core.database import close_db, engine
+from asyncticket.shared.core.exception_handlers import register_exception_handlers
 # 공용 로거 생성 함수
 from asyncticket.shared.core.logger import get_logger
 # Base : 모든 모델의 부모, 등록된 테이블 정보(metadata)를 가짐
@@ -27,10 +28,6 @@ from asyncticket.auth.presentation.routers.v1.router import (
 from asyncticket.users.presentation.router.v1.router import (
     router as users_router,
 )
-from asyncticket.shared.core.exception_handlers import (
-    register_exception_handlers,
-)
-from asyncticket.wiring import wire_dependencies
 # 이 파일에서 사용할 로거 (로그에 "app.main"이라는 이름으로 표시됨)
 logger = get_logger("app.main")
 
@@ -66,18 +63,17 @@ def create_app(
         version="1.0.0",
         lifespan=lifespan,
     )
-    # 앱마다 설정을 분리한다. 실제 인증 어댑터가 없으면 기존 401/503 정책을 따른다.
+    # 앱마다 설정을 분리한다. 인증기 미지정 시 wiring에서 공통 JWT 인증을 연결한다.
     app.state.catalog_authenticator = authenticator
     app.state.catalog_policy = policy if policy is not None else CatalogPolicy()
-    register_catalog_errors(app)
-    
     register_exception_handlers(app)
+    register_catalog_errors(app)
     wire_dependencies(app)
     # 각 라우터에 /v1 prefix가 있으므로 앱에서 중복으로 붙이지 않는다.
     app.include_router(show_router)
     app.include_router(performance_router)
 
-    
+    app.include_router(venue_router)
 
     # 인증/사용자 관련 라우터를 등록한다.
     app.include_router(auth_router)
@@ -87,4 +83,3 @@ def create_app(
 
 # uvicorn asyncticket.main:app 진입점을 유지한다.
 app = create_app()
-
