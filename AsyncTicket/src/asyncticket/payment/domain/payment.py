@@ -1,16 +1,14 @@
-﻿# Enum 미리 정의된 고정된 선택지 집합
-from enum import Enum
+﻿from enum import Enum
+from decimal import Decimal
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Optional
-
+from datetime import datetime
 
 class PaymentStatus(str, Enum):
     FAILED = "FAIL"
     PAID = "SUCCESS"
     REFUNDED = "REFUND"
 
-# @dataclas => __init__, self.xxx = xxx 생략 가능하게 해줌
 @dataclass
 class Payment:
     """
@@ -21,24 +19,25 @@ class Payment:
     - 예매 생성·좌석 처리·DB 저장은 하지 않음
     """
     pay_id: Optional[int]
-    reserv_id: Optional[int] = None
-    method: str
-    amount: int
-    status: PaymentStatus
-    created_at: Optional[datetime] = None
-    paid_at: Optional[datetime] = None
-    refunded_at: Optional[datetime] = None
+    method: str 
+    amount: Decimal 
+    status: PaymentStatus 
+    reserv_id: Optional[int] = None 
+    created_at: Optional[datetime] = None 
+    paid_at: Optional[datetime] = None 
+    refunded_at: Optional[datetime] = None 
 
     # 객체를 만들자마자 규칙을 검사
     def __post_init__(self) -> None:
         self._validate_invariant()
 
+
     def _validate_invariant(self) -> None:
         # 결제가 성공해야 예매가 확정된다
         if self.status == PaymentStatus.FAILED and self.reserv_id is not None:
-            raise ValueError("실패 상태의 결제는 예매와 연결될 수 없습니다.")
+            raise ValueError("결제를 실패했으면 예매와 연결될 수 없습니다.")
         # 성공하거나 환불된 결제는 반드시 예매와 연결되어 있어야 한다
-        if self.status in (PaymentStatus.PAID, PaymentStatus.REFUNDED) and self.reserv_id is None:
+        if self.status in (PaymentStatus.PAID,PaymentStatus.REFUNDED) and self.reserv_id is None:
             raise ValueError("성공/환불 상태의 결제는 예매와 연결되어 있어야 합니다.")
 
     def mark_as_failed(self) -> None:
@@ -63,6 +62,7 @@ class Payment:
         self.reserv_id = reserv_id
         self.paid_at = paid_at or datetime.utcnow()
         self._validate_invariant()
+
 
     def mark_as_refunded(self, refunded_at: Optional[datetime] = None) -> None:
         """

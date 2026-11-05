@@ -5,7 +5,7 @@ from asyncticket.wiring.performances import wire_dependencies as wire_performanc
 from asyncticket.wiring.seats import wire_dependencies as wire_seat_dependencies
 from asyncticket.wiring.performance_seats import wire_dependencies as wire_performance_seat_dependencies
 from asyncticket.wiring.venues import wire_dependencies as wire_venue_dependencies
-
+from asyncticket.wiring.payment import wire_dependencies as wire_payment_dependencies
 
 def wire_dependencies(app: FastAPI) -> None:
     wire_show_dependencies(app)
@@ -13,3 +13,4 @@ def wire_dependencies(app: FastAPI) -> None:
     wire_seat_dependencies(app)
     wire_performance_seat_dependencies(app)
     wire_venue_dependencies(app)
+    wire_payment_dependencies(app)

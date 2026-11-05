@@ -30,7 +30,8 @@ class Payment(Base):
     # 성공 / 실패 / 환불. 취소 결과는 환불로 기록
     status: Mapped[str] = mapped_column(String(30), nullable=False)
     # 결제 시도 생성 시각 (UTC)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False,     default=lambda: datetime.now(timezone.utc),
+)
     # 성공 상태로 바뀐 시각 (인프라 기록)
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # 환불 상태로 바뀐 시각 (인프라 기록)
