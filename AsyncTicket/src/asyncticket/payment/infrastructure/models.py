@@ -1,4 +1,4 @@
-﻿from datetime import datetime, timezone
+from datetime import datetime, timezone
 from decimal import Decimal
 from sqlalchemy import BigInteger, DateTime, ForeignKey, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column

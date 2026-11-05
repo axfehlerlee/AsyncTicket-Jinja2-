@@ -232,7 +232,7 @@ class SeatQueryTests(unittest.IsolatedAsyncioTestCase):
     async def test_grade_wiring_uses_its_own_repository(self):
         from fastapi import Depends
         from asyncticket.seats.application.service import SeatInfoService
-        from asyncticket.seats.presentation.dependencies import provide_seat_info_service
+        from asyncticket.wiring.seats import provide_seat_info_service
         from asyncticket.wiring.seats import wire_dependencies as wire_grades
 
         async def get_test_db():

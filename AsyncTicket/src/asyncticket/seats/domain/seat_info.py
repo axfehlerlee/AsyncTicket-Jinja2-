@@ -1,69 +1,90 @@
-"""수정 ERD의 seats_info를 표현하는 순수 파이썬 도메인.
-
-FastAPI, SQLAlchemy와 DB 세션을 여기서 사용하지 않는다.
-performance_seats의 생성 시점과 reserv_id의 NULL 정책은 별도 결정이다.
-"""
+# 도메인: 회차별 좌석 등급의 정보와 수량·가격 규칙을 정의한다.
+# 현재 값 속성은 기본 자료형으로 표현하며, 별도 VO 클래스는 없다.
 
 from dataclasses import dataclass
+from asyncticket.seats.domain.performanc_seat import PerformanceSeat
 
 
-def _require_integer(value: int, field_name: str, minimum: int) -> None:
-    """bool과 문자열을 제외한 정수인지, 업무상 최솟값을 지키는지 검사한다."""
-    if type(value) is not int or value < minimum:
-        raise ValueError(f"{field_name}은(는) {minimum} 이상의 정수여야 한다.")
-
-
-@dataclass(frozen=True, kw_only=True)
+# 좌석 등급 엔티티. seat_id로 등급을 식별한다.
+# dataclass의 기본 ==는 ID만이 아니라 모든 필드를 비교한다.
+@dataclass(kw_only=True)
 class SeatInfo:
-    """한 회차의 좌석 등급 설정. ERD의 미입력(NULL) 상태도 표현한다.
+    perf_id: int  # 소속 공연 회차 ID
+    name: str  # 등급명: R석, S석 등
+    total_seat: int  # 이 등급의 전체 좌석 수
+    price: int  # 한 자리 가격
+    seat_id: int | None = None  # 등급 ID. 신규 객체는 아직 ID가 없다.
 
-    seat_id는 등급 설정의 번호다. 개별 판매 좌석의 perf_seat_id와 다르다.
-    한 사람의 최대 예매 매수와 결제 여부는 이 클래스가 결정하지 않는다.
-    """
-
-    seat_id: int
-    perf_id: int
-    name: str | None = None
-    total_seat: int | None = None
-    price: int | None = None
-
+    # 생성 직후 ID·등급명·수량·가격의 범위를 검사한다.
     def __post_init__(self) -> None:
-        """객체를 만들 때 잘못된 번호, 좌석 수, 가격을 차단한다."""
-        _require_integer(self.seat_id, "좌석 등급 번호", 1)
-        _require_integer(self.perf_id, "회차 번호", 1)
-        if self.name is not None:
-            if not isinstance(self.name, str) or len(self.name) > 255:
-                raise ValueError("좌석 등급명은 255자 이하의 문자열이어야 한다.")
-        if self.total_seat is not None:
-            _require_integer(self.total_seat, "전체 좌석 수", 0)
-        if self.price is not None:
-            _require_integer(self.price, "가격", 0)
+        if self.perf_id <= 0:
+            raise ValueError("회차 ID는 1 이상이어야 합니다.")
 
-    def require_configured(self) -> None:
-        """판매 규칙을 검사하기 전에 등급 설정이 갖춰졌는지 확인한다."""
-        if self.name is None or not self.name.strip():
-            raise ValueError("좌석 등급명을 먼저 설정해야 한다.")
-        if self.total_seat is None:
-            raise ValueError("전체 좌석 수를 먼저 설정해야 한다.")
-        if self.price is None:
-            raise ValueError("판매 가격을 먼저 설정해야 한다.")
+        if self.seat_id is not None and self.seat_id <= 0:
+            raise ValueError("좌석 등급 ID는 1 이상이어야 합니다.")
 
+        if not self.name.strip():
+            raise ValueError("좌석 등급명은 비어 있을 수 없습니다.")
+
+        if self.total_seat <= 0:
+            raise ValueError("좌석 수는 1 이상이어야 합니다.")
+
+        # 최소 50,000원은 현재 학습 기준이며, 팀 최종 정책은 미정이다.
+        if self.price < 50000:
+            raise ValueError("가격은 50000 이상이어야 합니다.")
+
+    # 전체 좌석 수에서 호출자가 전달한 점유 수를 빼 잔여석을 구한다.
     def remaining_seats(self, occupied_count: int) -> int:
-        """호출자가 계산해 준 점유 수로 남은 좌석 수를 계산한다.
+        if occupied_count < 0:
+            raise ValueError("점유 좌석 수는 음수일 수 없습니다.")
 
-        무엇을 점유로 셀지는 외부 계약이다. 이 함수는 DB를 조회하거나
-        좌석을 선점하지 않으며, 동시 예매를 막는 잠금도 수행하지 않는다.
-        """
-        _require_integer(occupied_count, "점유 좌석 수", 0)
-        if self.total_seat is None:
-            raise ValueError("전체 좌석 수를 먼저 설정해야 한다.")
         if occupied_count > self.total_seat:
-            raise ValueError("점유 좌석 수가 전체 좌석 수보다 많다.")
+            raise ValueError("점유 좌석 수가 전체 좌석 수보다 많습니다.")
+
         return self.total_seat - occupied_count
 
+    # 요청 매수가 1 이상이고 잔여석 이내인지 검사한다.
     def require_capacity(self, quantity: int, occupied_count: int) -> None:
-        """요청한 매수를 수용할 수 있는지 검사한다. 실제 예매 처리는 아니다."""
-        _require_integer(quantity, "요청 매수", 1)
-        self.require_configured()
+        if quantity <= 0:
+            raise ValueError("요청 매수는 1 이상이어야 합니다.")
+
         if quantity > self.remaining_seats(occupied_count):
-            raise ValueError("남은 좌석이 부족하다.")
+            raise ValueError("남은 좌석이 부족합니다.")
+
+    # ID가 없는 신규 좌석 등급 객체를 만든다.
+    @classmethod
+    def create(
+        cls,
+        *,
+        perf_id: int,
+        name: str,
+        total_seat: int,
+        price: int,
+    ) -> "SeatInfo":
+        return cls(
+            perf_id=perf_id,
+            name=name,
+            total_seat=total_seat,
+            price=price,
+        )
+
+    # 등급 ID와 좌석명 목록으로 개별 좌석 객체를 만든다.
+    def create_seats(self, seat_seqs: list[str]) -> list[PerformanceSeat]:
+        if self.seat_id is None:
+            raise ValueError("등급을 먼저 저장해야 합니다.")
+
+        if len(seat_seqs) != self.total_seat:
+            raise ValueError("좌석명 개수와 등급 좌석 수가 일치해야 합니다.")
+
+        if len(set(seat_seqs)) != len(seat_seqs):
+            raise ValueError("중복된 좌석명이 있습니다.")
+
+        return [
+            PerformanceSeat(
+                seat_id=self.seat_id,
+                seat_seq=seat_seq,
+                # 초기 상태 AVAILABLE은 임시 기준이다.
+                status="AVAILABLE",
+            )
+            for seat_seq in seat_seqs
+        ]
