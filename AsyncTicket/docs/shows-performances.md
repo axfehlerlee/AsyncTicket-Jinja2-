@@ -132,7 +132,9 @@ HTTP 전송 전 commit 보장은 별도 통합 검증 대상이다.
 
 - `wiring/shows.py`: 공연의 서비스 주입 계약·저장소·연결 조회·UoW·정책 조립과 등록.
 - `wiring/performances.py`: 회차의 서비스 주입 계약·저장소·부모 공연 서비스 조립과 등록.
-- `wiring/__init__.py`: 기존 좌석·공연장 바인딩을 유지하면서 공연·회차 바인딩도 등록.
+- `wiring/common.py`: 공연·회차가 공유하는 `DatabaseSession`과 `get_catalog_policy` 정의.
+- `performances/application/ports.py`: 회차가 요구하는 `ShowAccess` 계약. 공연 조회·소유권 확인만 포함.
+- `wiring/__init__.py`: 공연·회차 바인딩을 다른 도메인의 바인딩과 함께 등록.
 - `main.create_app()`: 공용 wiring과 공통 예외 처리기를 등록하고 기존 라우터·인증 설정·lifespan 유지.
 - 루트 및 공연·회차 표현 계층의 별도 의존성 파일과 통합 `wiring/catalog.py`는 제거했다.
 
@@ -140,6 +142,11 @@ HTTP 전송 전 commit 보장은 별도 통합 검증 대상이다.
 인프라 저장소를 직접 import하거나 라우터에서 객체를 조립하지 않는다.
 FastAPI의 요청 단위 DB dependency 캐시를 사용하므로 부모 공연 권한 확인과 회차 변경은
 같은 세션으로 실행된다. 공용 wiring 호출이 좌석 라우터의 자동 등록을 의미하지는 않는다.
+회차 응용 서비스와 wiring은 공연 응용 서비스의 구체 타입 대신 `ShowAccess`를 요구하고,
+실제 객체는 기존 공연 서비스를 주입한다. 소유권 확인의 공연 `FOR UPDATE` 잠금은
+회차 INSERT/UPDATE/DELETE와 같은 세션에서 실행되고, 회차의 commit/rollback까지 유지한다.
+SQLite 검증에서는 실제 SQL의 PostgreSQL 컴파일 결과와 세션·실행 순서를 확인하며,
+실제 PostgreSQL에서의 동시 요청 잠금 대기 검증과는 구분한다.
 
 ## 실행·검증
 
