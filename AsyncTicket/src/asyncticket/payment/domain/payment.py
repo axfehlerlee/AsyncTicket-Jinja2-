@@ -58,6 +58,11 @@ class Payment:
             raise ValueError("환불된 결제는 다시 성공으로 바꿀 수 없습니다.")
         if reserv_id is None:
             raise ValueError("성공 상태에는 예매 ID가 필요합니다.")
+        if self.status == PaymentStatus.PAID:
+            # 같은 예매로 다시 오면 기존 기록을 그대로 둔다(재요청 허용).
+            if self.reserv_id == reserv_id:
+                return
+            raise ValueError("이미 다른 예매와 연결된 성공 결제입니다.")
         self.status = PaymentStatus.PAID
         self.reserv_id = reserv_id
         self.paid_at = paid_at or datetime.now(timezone.utc)
