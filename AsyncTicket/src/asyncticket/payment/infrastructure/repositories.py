@@ -1,7 +1,8 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from asyncticket.payment.domain.payment import Payment, PaymentStatus
+from asyncticket.payment.domain.payment import Payment
+from asyncticket.payment.domain.enums import PaymentStatus
 from asyncticket.payment.domain.repository import PaymentRepository
 from asyncticket.payment.infrastructure.models import Payment as PaymentModel
 

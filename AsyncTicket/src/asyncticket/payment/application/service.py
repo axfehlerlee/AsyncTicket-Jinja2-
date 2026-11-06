@@ -5,7 +5,8 @@ from datetime import datetime
 from decimal import Decimal
 
 
-from asyncticket.payment.domain.payment import Payment, PaymentStatus
+from asyncticket.payment.domain.payment import Payment
+from asyncticket.payment.domain.enums import PaymentStatus
 from asyncticket.payment.domain.repository import PaymentRepository
 from asyncticket.shared.core.exceptions import ConflictException, NotFoundException
 
@@ -24,7 +25,7 @@ class PaymentService:
         return payment
 
     async def record_attempt(self, method: str, amount: Decimal) -> Payment:
-        # 예매 번호가 없는 결제는 실패 상태만 규칙을 통과한다.
+        # 실패한 결제 시도를 FAILED 상태로 저장한다. 예매와 연결하지 않는다(reserv_id=None).
         payment = Payment(
             pay_id=None,
             method=method,

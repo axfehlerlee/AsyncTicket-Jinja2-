@@ -1,13 +1,8 @@
-﻿from enum import Enum
-from decimal import Decimal
+﻿from decimal import Decimal
 from dataclasses import dataclass
 from typing import Optional
 from datetime import datetime, timezone
-
-class PaymentStatus(str, Enum):
-    FAILED = "FAIL"
-    PAID = "SUCCESS"
-    REFUNDED = "REFUND"
+from asyncticket.payment.domain.enums import PaymentStatus
 
 @dataclass
 class Payment:
