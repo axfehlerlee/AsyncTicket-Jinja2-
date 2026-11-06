@@ -11,8 +11,15 @@ from asyncticket.shared.core.exceptions import (
     ConflictException,
     NotFoundException,
     SharedException,
+    ValidationException,
 )
 from asyncticket.shared.domain.catalog import CatalogActor, CatalogPolicy
+
+
+class SeatReservationConflictError(ConflictException):
+    """기존 호출자가 구분하는 예외 이름을 유지하며 팀 공통 409 처리에 연결한다."""
+    def __init__(self, message: str):
+        super().__init__(message, error_code="SEAT_RESERVATION_CONFLICT")
 
 
 class SeatInfoService:
@@ -241,3 +248,19 @@ class PerformanceSeatService:
                 "예매 좌석을 찾을 수 없습니다.", error_code="RESERVATION_NOT_FOUND"
             )
         return reservation
+
+    async def assign_reservation(
+        self, *, perf_id: int, perf_seat_id: int, reserv_id: int,
+        expected_status: str, reserved_status: str,
+    ) -> None:
+        """예매와 같은 세션에서 호출한다. 상태값은 팀 합의 후 전달한다."""
+        if min(perf_id, perf_seat_id, reserv_id) <= 0:
+            raise ValidationException("회차·좌석·예매 번호는 양수여야 합니다.", error_code="INVALID_SEAT_RESERVATION_ID")
+        if not expected_status or not reserved_status or expected_status == reserved_status:
+            raise ValidationException("연결 전후의 서로 다른 좌석 상태가 필요합니다.", error_code="INVALID_SEAT_STATUS_TRANSITION")
+        linked = await self.repository.assign_reservation(
+            perf_id=perf_id, perf_seat_id=perf_seat_id, reserv_id=reserv_id,
+            expected_status=expected_status, reserved_status=reserved_status,
+        )
+        if not linked:
+            raise SeatReservationConflictError("좌석을 예매에 연결할 수 없습니다.")

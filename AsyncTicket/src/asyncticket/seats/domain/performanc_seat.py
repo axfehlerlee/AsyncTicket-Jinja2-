@@ -1,5 +1,6 @@
-from dataclasses import dataclass
+# 1 예매 전용 좌석 도메인 (PerformanceSeat)
 
+from dataclasses import dataclass
 
 @dataclass(frozen=True, kw_only=True)
 class PerformanceSeat:

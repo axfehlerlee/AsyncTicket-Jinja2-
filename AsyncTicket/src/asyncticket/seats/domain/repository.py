@@ -68,3 +68,15 @@ class PerformanceSeatRepository(ABC):
         self, reserv_id: int, user_id: int,
     ) -> dict[str, object] | None:
         pass
+
+    @abstractmethod
+    async def assign_reservation(
+        self,
+        *,
+        perf_id: int,
+        perf_seat_id: int,
+        reserv_id: int,
+        expected_status: str,
+        reserved_status: str,
+    ) -> bool:
+        pass
