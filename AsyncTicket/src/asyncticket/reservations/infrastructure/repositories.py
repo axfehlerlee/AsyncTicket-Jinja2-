@@ -4,7 +4,7 @@
         1) 예매를 저장 (예매생성은 reservation.py-Reservation에서)
         2) 예매 ID로 찾고
         3) 회원의 예매 목록을 찾고
-        4) 바뀐 상태(취소)를 저장
+        4) 바뀐 상태(취소, 확정)를 저장
     - commit은 하지 않는다 : 
         - 요청이 끝날 때 get_db가 commit
         - 예매 저장 → 좌석 연결 → 결제 처리를 한 트랜잭션으로 묶기 위해 flush만 한다
@@ -101,10 +101,10 @@ class SqlAlchemyReservationRepository(ReservationRepository):
         return [self._to_entity(row) for row in rows]
 
 
-    # 4) 바뀐 상태(취소)를 저장
-    async def reserv_cancel_update(self, 
+    # 4) 바뀐 상태(확정,취소)를 저장
+    async def reserv_status_update(self, 
                                    reservation:Reservation) -> None :
-        """4) 예매 취소 바뀐상태를 저장"""
+        """4) 예매 상태 변경(확정, 취소)을 저장"""
         # ① 저장할 예매 행을 DB에서 찾기 (예매 테이블만 있으면 되므로 JOIN 없이)
         statement = (
             select(ReservationModel)
@@ -115,9 +115,10 @@ class SqlAlchemyReservationRepository(ReservationRepository):
         if row is None : 
             raise LookupError(f"저장할 예매가 없습니다: reserv_id={reservation.reserv_id}")
 
-        # ② 엔티티(cancel()으로 바뀐 값) → DB 행에 옮기기
-        row.status = reservation.status.value       # enum -> DB문자열 ("CANCELED")
-        row.canceled_at = reservation.canceled_at   # 취소 일시
+        # ② 엔티티(confirm()·cancel()로 바뀐 값) → DB 행에 옮기기
+        row.status = reservation.status.value       # enum -> DB문자열
+        row.confirmed_at = reservation.confirmed_at   # 확정 일시 (확정 시)
+        row.canceled_at = reservation.canceled_at     # 취소 일시 (취소 시)
 
         # ③ UPDATE만 보내기 (commit은 get_db가 함)
         await self.session.flush()
