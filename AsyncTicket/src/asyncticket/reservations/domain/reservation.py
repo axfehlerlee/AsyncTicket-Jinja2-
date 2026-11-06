@@ -74,7 +74,7 @@ class ReservedPerformance:
 @dataclass(frozen=True, kw_only=True)
 class ReservedSeat:
     """예매한 좌석 정보 (performance_seats, seats_info)"""
-    reserved_seat_id: int        
+    reserved_seat_id: int | None = None  # performance_seats.perf_seat_id (좌석 연결 전·취소 후 재판매 시 None 가능)      
     reserved_seat_price: Decimal # 예매생성 : 예매 금액 = 좌석
 
 @dataclass(frozen=True, kw_only=True)
