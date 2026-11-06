@@ -5,7 +5,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from asyncticket.shared.core.models import Base # 모든 테이블의 부모
 
 
-class Reservation(Base):
+class ReservationModel(Base):
     """예매"""
 
     # DB에 만들어질 실제 테이블 이름
@@ -67,44 +67,3 @@ class Reservation(Base):
     canceled_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True)
-
-
-# class ReservationItem(Base):
-#     """예매 상품"""
-
-#     __tablename__ = "reservation_items"
-
-# # 고민거리 
-# #   1) 예매상품이란 테이블은 erd에 없는데.. 새로 만들어될지?, 
-# #   2) 아니면 performance_seats 테이블을 예매에서 따로 관리를 하는 것인지??
-# #       - 2번의 경우 seats/infrastucture models.py에 구성된 performance_seats class는 제외해야 오류가 나지 않음
-
-#     perf_seat_id: Mapped[int] = mapped_column(
-#         primary_key=True,
-#         autoincrement=True
-#     )
-
-#     # FK (reservations.reserv_id)
-#     reserv_id: Mapped[int] = mapped_column(
-#         ForeignKey("reservations.reserv_id"),
-#         nullable=False,
-#         index=True
-#     )
-
-#     # FK (seats_info.seat_id)
-#     seat_id2: Mapped[int] = mapped_column(
-#         ForeignKey("seats_info.seat_id"),
-#         nullable=False,
-#         index=True
-#     )
-
-#     status: Mapped[str] = mapped_column(
-#         String(30),
-#         nullable=False
-#     )
-
-#     seat_seq: Mapped[str] = mapped_column(
-#         String(255),
-#         nullable=True # 좌석명 null 가능
-#     )
-
