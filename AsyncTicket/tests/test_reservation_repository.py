@@ -31,7 +31,7 @@ from sqlalchemy.orm import Session
 from asyncticket.shared.core.models import Base, init_models
 from asyncticket.reservations.domain.enums import ReservationStatus
 from asyncticket.reservations.domain.reservation import (
-    Reservation, TicketHolder, ReservedPerformance, ReservedSeat, ReservedPayment,
+    Reservation, TicketHolder, ReservedPerformance, ReservedSeat, ReservedPayment
 )
 from asyncticket.reservations.infrastructure.models import ReservationModel
 from asyncticket.reservations.infrastructure.repositories import SqlAlchemyReservationRepository
@@ -96,12 +96,12 @@ class ReservationRepositoryTests(unittest.IsolatedAsyncioTestCase):
         self.engine.dispose()
 
     def insert_reservation(self, *, reserv_id, user_id=OWNER_ID, status="CONFIRMED",
-                           created_at=datetime(2026, 11, 5, tzinfo=UTC)):
-        """테스트용 예매 행을 DB에 직접 넣는 도우미"""
+                           created_at=datetime(2026, 11, 5, tzinfo=UTC),confirmed=True):
+        """테스트용 예매 행을 DB에 직접 넣는 도우미 (confirmed=False면 확정 일시 없이)"""
         self.db.add(ReservationModel(
             reserv_id=reserv_id, order_number=f"ORD-{reserv_id}", user_id=user_id,
             perf_id=PERF_ID, quantity=1, total_amount=Decimal("150000"), status=status,
-            created_at=created_at, confirmed_at=created_at,
+            created_at=created_at, confirmed_at=created_at if confirmed else None,
         ))
         self.db.flush()
 
@@ -120,7 +120,7 @@ class ReservationRepositoryTests(unittest.IsolatedAsyncioTestCase):
     # =========================================================
     async def test_저장하면_reserv_id와_created_at이_채워진다(self):
         # 준비 : 아직 DB에 없는 새 예매 (reserv_id, created_at 없음)
-        reservation = Reservation.confirm_new(
+        reservation = Reservation.create_pending(
             ticketholder=TicketHolder(ticketholder_id=OWNER_ID),
             performance=ReservedPerformance(
                 reserved_perf_id=PERF_ID,
@@ -129,7 +129,6 @@ class ReservationRepositoryTests(unittest.IsolatedAsyncioTestCase):
                 reserv_closes_at=datetime(2026, 11, 30, tzinfo=UTC),
             ),
             seat=ReservedSeat(reserved_seat_id=100, reserved_seat_price=Decimal("150000")),
-            payment=ReservedPayment(reserved_pay_id=None),
             order_number="ORD-NEW",
             now=datetime(2026, 11, 5, tzinfo=UTC),
         )
@@ -146,7 +145,7 @@ class ReservationRepositoryTests(unittest.IsolatedAsyncioTestCase):
         row = self.db.get(ReservationModel, saved.reserv_id)
         self.assertEqual(row.user_id, OWNER_ID)
         self.assertEqual(row.perf_id, PERF_ID)
-        self.assertEqual(row.status, "CONFIRMED")               # enum → DB 문자열
+        self.assertEqual(row.status, "PENDING")               # enum → DB 문자열
         self.assertEqual(row.total_amount, Decimal("150000"))
 
     # =========================================================
@@ -203,17 +202,35 @@ class ReservationRepositoryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reservations, [])
 
     # =========================================================
-    # 4) reserv_cancel_update : 바뀐 상태(취소) 저장
+    # 4) reserv_status_update : 바뀐 상태(확정, 취소) 저장
     # =========================================================
+    async def test_확정하면_상태와_확정일시가_저장된다(self):
+        # 준비 : 예매대기 예매를 조회해서 결제 성공 후 확정
+        self.insert_reservation(reserv_id=5, status="PENDING", confirmed=False)
+        reservation = await self.repository.find_by_reserv_id(5)
+        confirm_time = datetime(2026, 11, 5, 0, 5)    # SQLite는 타임존을 버리므로 타임존 없이
+        reservation.confirm(ReservedPayment(reserved_pay_id=30), confirm_time)
+
+        # 실행
+        await self.repository.reserv_status_update(reservation)
+
+        # 확인 : DB 행이 바뀌었다
+        row = self.db.get(ReservationModel, 5)
+        self.assertEqual(row.status, "CONFIRMED")
+        self.assertEqual(row.confirmed_at, confirm_time)
+        self.assertIsNone(row.canceled_at)
+
+
     async def test_취소하면_상태와_취소일시가_저장되고_확정일시는_그대로다(self):
         # 준비 : 확정 예매를 조회해서 엔티티로 취소 (취소 일시는 cancel()이 정함)
+        
         self.insert_reservation(reserv_id=5, created_at=datetime(2026, 11, 5, tzinfo=UTC))
         reservation = await self.repository.find_by_reserv_id(5)
         cancel_time = datetime(2026, 11, 20, 15)    # SQLite는 타임존을 버리므로 타임존 없이
         reservation.cancel(OWNER_ID, cancel_time)
 
         # 실행
-        await self.repository.reserv_cancel_update(reservation)
+        await self.repository.reserv_status_update(reservation)
 
         # 확인 : DB 행이 바뀌었다
         row = self.db.get(ReservationModel, 5)
@@ -227,7 +244,7 @@ class ReservationRepositoryTests(unittest.IsolatedAsyncioTestCase):
         reservation.reserv_id = 999                                      # DB에 없는 예매 ID
 
         with self.assertRaises(LookupError):
-            await self.repository.reserv_cancel_update(reservation)
+            await self.repository.reserv_status_update(reservation)
 
 
 if __name__ == "__main__":
