@@ -32,7 +32,7 @@ async def list_seats(perf_id: PositiveId, service: PerformanceService):
     ))
 
 
-@router.get("/performances/{perf_id}/seats/{seat_seq}", response_model=APIResponse[SeatResponse])
+@router.get("/performances/{perf_id}/seats/{seat_seq:path}", response_model=APIResponse[SeatResponse])
 async def get_seat(perf_id: PositiveId, seat_seq: SeatSeq, service: PerformanceService):
     seat = await service.get_performance_seat(perf_id, seat_seq)
     return APIResponse[SeatResponse].ok(data=SeatResponse.model_validate(seat))

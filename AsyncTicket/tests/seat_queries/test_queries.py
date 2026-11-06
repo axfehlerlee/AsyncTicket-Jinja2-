@@ -155,6 +155,29 @@ class SeatQueryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(second.json()["data"]["perf_seat_id"], 1002)
         self.assertEqual(second.json()["data"]["status"], "RESERVED")
 
+    async def test_detail_supports_slash_in_seat_sequence(self):
+        async with self.sessions() as session:
+            await session.execute(
+                insert(PerformanceSeats).values(
+                    perf_seat_id=9001,
+                    seat_id2=101,
+                    seat_seq="A/01",
+                    status="AVAILABLE",
+                    reserv_id=None,
+                )
+            )
+            await session.commit()
+
+        for seat_path in ("A/01", "A%2F01"):
+            with self.subTest(seat_path=seat_path):
+                response = await self.client.get(
+                    f"/v1/performances/10/seats/{seat_path}"
+                )
+                self.assertEqual(response.status_code, 200)
+                data = response.json()["data"]
+                self.assertEqual(data["perf_seat_id"], 9001)
+                self.assertEqual(data["seat_seq"], "A/01")
+
     async def test_missing_seat_in_existing_performance_returns_404(self):
         for path in ("/v1/performances/10/seats/Z99", "/v1/performances/30/seats/A01"):
             with self.subTest(path=path):
