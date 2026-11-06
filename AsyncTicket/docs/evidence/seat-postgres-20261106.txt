@@ -1,0 +1,23 @@
+ASYNCTICKET | SEAT POSTGRESQL TEST EVIDENCE
+2026-11-06 16:09:13 KST
+Scope: seat tests only / dedicated local PostgreSQL
+Mode: temporary seat_test_<UUID> schemas; no team DB changes
+
+[1] Actual PostgreSQL test execution
+........<project>/.venv/lib/python3.13/site-packages/starlette/_exception_handler.py:59: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+  response = await handler(conn, exc)  # type: ignore[arg-type]
+.............
+----------------------------------------------------------------------
+Ran 21 tests in 1.122s
+
+OK
+
+[2] Read-only verification after test execution
+PostgreSQL version: 17.11 (Debian 17.11-1.pgdg13+2)
+Remaining seat_test_* schemas: 0
+Public tables: 0
+Transaction read-only: on
+
+PASS | 21 PostgreSQL tests / temporary schemas cleaned up
+Not covered: real JWT/payment E2E, existing team DB migration
+Credentials and connection URLs are intentionally omitted.
