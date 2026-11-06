@@ -4,12 +4,13 @@ from dataclasses import FrozenInstanceError
 import unittest
 
 from asyncticket.seats.domain.seat_info import SeatInfo
+from asyncticket.seats.domain.enums import SeatGrade
 
 
 class SeatInfoTests(unittest.TestCase):
     def setUp(self):
         self.grade = SeatInfo(
-            seat_id=101, perf_id=10, name="R석", total_seat=30, price=55000
+            seat_id=101, perf_id=10, name=SeatGrade.R, total_seat=30, price=55000
         )
 
     def test_remaining_seats(self):
@@ -39,7 +40,8 @@ class SeatInfoTests(unittest.TestCase):
         for field in ("seat_id", "perf_id"):
             for value in (0, -1, True, "10"):
                 with self.subTest(field=field, value=value):
-                    values = {"seat_id": 101, "perf_id": 10, field: value}
+                    values = dict(seat_id=101, perf_id=10, name=SeatGrade.R, total_seat=30, price=55000)
+                    values[field] = value
                     with self.assertRaises(ValueError):
                         SeatInfo(**values)
 
@@ -47,39 +49,45 @@ class SeatInfoTests(unittest.TestCase):
         for field in ("total_seat", "price"):
             for value in (-1, True, "100"):
                 with self.subTest(field=field, value=value):
-                    values = {"seat_id": 101, "perf_id": 10, field: value}
+                    values = dict(seat_id=101, perf_id=10, name=SeatGrade.R, total_seat=30, price=55000)
+                    values[field] = value
                     with self.assertRaises(ValueError):
                         SeatInfo(**values)
 
-    def test_incomplete_erd_row_is_not_a_sellable_configuration(self):
-        incomplete = SeatInfo(seat_id=101, perf_id=10)
-        with self.assertRaises(ValueError):
-            incomplete.require_configured()
-        with self.assertRaises(ValueError):
-            incomplete.remaining_seats(0)
-        with self.assertRaises(ValueError):
-            incomplete.require_capacity(1, 0)
+    def test_incomplete_configuration_is_rejected_at_creation(self):
+        with self.assertRaises(TypeError):
+            SeatInfo(seat_id=101, perf_id=10)
 
     def test_each_required_configuration_field(self):
         for field, value in (("name", None), ("name", " "), ("total_seat", None), ("price", None)):
             with self.subTest(field=field, value=value):
-                values = dict(seat_id=101, perf_id=10, name="R석", total_seat=30, price=55000)
+                values = dict(seat_id=101, perf_id=10, name=SeatGrade.R, total_seat=30, price=55000)
                 values[field] = value
                 with self.assertRaises(ValueError):
-                    SeatInfo(**values).require_configured()
+                    SeatInfo(**values)
 
-    def test_zero_capacity_and_free_price(self):
-        empty = SeatInfo(seat_id=101, perf_id=10, name="무료석", total_seat=0, price=0)
-        empty.require_configured()
-        self.assertEqual(empty.remaining_seats(0), 0)
+    def test_nonnegative_price_and_positive_capacity_boundaries(self):
+        for field, value in (("total_seat", 0), ("price", -1)):
+            with self.subTest(field=field, value=value):
+                values = dict(seat_id=101, perf_id=10, name=SeatGrade.R, total_seat=30, price=0)
+                values[field] = value
+                with self.assertRaises(ValueError):
+                    SeatInfo(**values)
+        minimum = SeatInfo(seat_id=101, perf_id=10, name=SeatGrade.R, total_seat=1, price=0)
+        for price in (0, 1, 49999):
+            with self.subTest(price=price):
+                grade = SeatInfo(seat_id=101, perf_id=10, name=SeatGrade.R, total_seat=1, price=price)
+                self.assertEqual(grade.price, price)
+        self.assertEqual(minimum.remaining_seats(0), 1)
+        self.assertEqual(minimum.remaining_seats(1), 0)
         with self.assertRaises(ValueError):
-            empty.require_capacity(1, 0)
+            minimum.require_capacity(1, 1)
 
     def test_invalid_grade_name(self):
         for name in (False, 42, "가" * 256):
             with self.subTest(name=name):
                 with self.assertRaises(ValueError):
-                    SeatInfo(seat_id=101, perf_id=10, name=name)
+                    SeatInfo(seat_id=101, perf_id=10, name=name, total_seat=30, price=55000)
 
     def test_validated_values_cannot_be_changed_directly(self):
         with self.assertRaises(FrozenInstanceError):

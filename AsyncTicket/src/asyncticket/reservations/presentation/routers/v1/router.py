@@ -18,7 +18,7 @@ router = APIRouter(prefix="/v1/reservations", tags=["예매"])
     description="로그인한 회원이 좌석 1개를 선택해 결제를 마치면 예매가 확정")
 async def create_reservation(
 ):
-    pass
+    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="예매 기능은 아직 구현되지 않았습니다.")
 
 
 @router.get("",
@@ -26,7 +26,7 @@ async def create_reservation(
     description="로그인한 회원이 본인의 예매 내역을 최신순으로 확인 취소한 예매 포함")
 async def get_list_reservation(
 ):
-    pass
+    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="예매 기능은 아직 구현되지 않았습니다.")
 
 @router.get("/{reserv_id}",
     summary="예매 상세 조회",
@@ -34,7 +34,7 @@ async def get_list_reservation(
 async def get_detail_reservation(
     reserv_id: int = Path(description="예매번호")
 ):
-    pass
+    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="예매 기능은 아직 구현되지 않았습니다.")
 
 @router.post("/{reserv_id}/cancel",
     summary="예매 취소",
@@ -42,4 +42,4 @@ async def get_detail_reservation(
 async def cancel_reservation(
     reserv_id: int = Path(description="예매번호")
 ):
-    pass
+    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="예매 기능은 아직 구현되지 않았습니다.")
