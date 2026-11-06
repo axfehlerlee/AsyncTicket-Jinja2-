@@ -464,7 +464,9 @@ class CatalogApiTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_missing_common_authentication_module_never_grants_access(self) -> None:
         app = create_app()
-        status, _, result = await catalog_request(app, "POST", "/v1/shows", self.show_body(), "anything")
+        # This case must remain deterministic when a developer has configured JWT.
+        with patch.dict("os.environ", {"JWT_SECRET_KEY": ""}):
+            status, _, result = await catalog_request(app, "POST", "/v1/shows", self.show_body(), "anything")
         self.assertEqual(status, 503)
         self.assertEqual(result["code"], "INTEGRATION_UNAVAILABLE")
 

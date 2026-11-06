@@ -255,7 +255,7 @@ class SeatQueryTests(unittest.IsolatedAsyncioTestCase):
             seats = root / domain
             for folder in ("domain", "application", "presentation"):
                 for source in (seats / folder).glob("*.py"):
-                    tree = ast.parse(source.read_text())
+                    tree = ast.parse(source.read_text(encoding="utf-8"))
                     imports = []
                     for node in ast.walk(tree):
                         if isinstance(node, ast.ImportFrom):
