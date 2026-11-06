@@ -3,6 +3,7 @@
 from dataclasses import asdict
 from datetime import date, datetime, time, timedelta, timezone
 
+from asyncticket.performances.application.ports import ShowAccess
 from asyncticket.performances.domain.performance import Performance, PerformanceNotFoundError
 from asyncticket.performances.domain.repositories import PerformanceRepository
 from asyncticket.shared.domain.catalog import (
@@ -10,7 +11,6 @@ from asyncticket.shared.domain.catalog import (
     CatalogValidationError,
 )
 from asyncticket.shared.domain.catalog_validation import validate_performance
-from asyncticket.shows.application.service import ShowApplicationService
 
 KST = timezone(timedelta(hours=9), name="Asia/Seoul")
 # KST 자정의 UTC 변환과 다음 날짜 경계 조회에 안전한 범위를 함께 사용한다.
@@ -20,7 +20,7 @@ PERFORMANCE_DATE_MAX = date.max - timedelta(days=1)
 
 class PerformanceApplicationService:
     def __init__(
-        self, repository: PerformanceRepository, show_service: ShowApplicationService,
+        self, repository: PerformanceRepository, show_service: ShowAccess,
         relations: CatalogRelations, unit_of_work: CatalogUnitOfWork, policy: CatalogPolicy,
     ) -> None:
         self._repository = repository
