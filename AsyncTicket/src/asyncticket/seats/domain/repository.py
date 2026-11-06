@@ -69,6 +69,7 @@ class PerformanceSeatRepository(ABC):
     ) -> dict[str, object] | None:
         pass
 
+    # 예매 연결 성공은 True, 조건 불일치는 False로 반환한다.
     @abstractmethod
     async def assign_reservation(
         self,

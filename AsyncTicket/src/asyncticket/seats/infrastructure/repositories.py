@@ -250,6 +250,8 @@ class SqlAlchemyPerformanceSeatRepository(PerformanceSeatRepository):
         expected_status: str,
         reserved_status: str,
     ) -> bool:
+        # 예매 측에서 같은 세션으로 먼저 flush하고, 최종 commit도 맡는다.
+        # 좌석의 회차·현재 상태·미연결 여부와 같은 회차의 예매 존재를 함께 검사한다.
         stmt = (
             update(PerformanceSeats)
             .where(

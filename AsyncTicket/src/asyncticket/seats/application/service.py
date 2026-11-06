@@ -254,6 +254,7 @@ class PerformanceSeatService:
         expected_status: str, reserved_status: str,
     ) -> None:
         """예매와 같은 세션에서 호출한다. 상태값은 팀 합의 후 전달한다."""
+        # reserv_id는 예매에서 받은 ID, 두 status는 연결 전후의 좌석 상태다.
         if min(perf_id, perf_seat_id, reserv_id) <= 0:
             raise ValidationException("회차·좌석·예매 번호는 양수여야 합니다.", error_code="INVALID_SEAT_RESERVATION_ID")
         if not expected_status or not reserved_status or expected_status == reserved_status:
