@@ -1,5 +1,5 @@
 # 1 예매 전용 좌석 도메인 (PerformanceSeat)
-
+from asyncticket.seats.domain.enums import SeatStatus
 from dataclasses import dataclass
 
 @dataclass(frozen=True, kw_only=True)
@@ -8,9 +8,9 @@ class PerformanceSeat:
 
     seat_id: int
     seat_seq: str
-    status: str
+    status: SeatStatus
     perf_seat_id: int | None = None
-    reserv_id: int | None = None
+    reserv_id: int | None = None    
 
     def __post_init__(self) -> None:
         if self.perf_seat_id is not None and (
@@ -23,8 +23,8 @@ class PerformanceSeat:
 
         self.validate_seat_seq(self.seat_seq)
 
-        if not isinstance(self.status, str) or not self.status.strip() or len(self.status) > 30:
-            raise ValueError("좌석 상태는 공백이 아닌 1~30자여야 합니다.")
+        if not isinstance(self.status, SeatStatus):
+            raise ValueError("좌석 상태는 SeatStatus 타입이어야 합니다.")
 
         if self.reserv_id is not None and (
             type(self.reserv_id) is not int or self.reserv_id <= 0

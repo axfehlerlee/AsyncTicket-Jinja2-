@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-
+from asyncticket.seats.domain.enums import SeatGrade, SeatStatus
 from asyncticket.seats.domain.performanc_seat import PerformanceSeat
 
 
@@ -8,7 +8,7 @@ class SeatInfo:
     """특정 공연 회차의 좌석 등급."""
 
     perf_id: int
-    name: str
+    name: SeatGrade
     total_seat: int
     price: int
     seat_id: int | None = None
@@ -22,15 +22,14 @@ class SeatInfo:
         ):
             raise ValueError("좌석 등급 ID는 1 이상이어야 합니다.")
 
-        if not isinstance(self.name, str) or not self.name.strip() or len(self.name) > 255:
-            raise ValueError("좌석 등급명은 공백이 아닌 1~255자여야 합니다.")
+        if not isinstance(self.name, SeatGrade):
+            raise ValueError("좌석 등급은 SeatGrade 타입이어야 합니다.")
 
         if type(self.total_seat) is not int or self.total_seat <= 0:
             raise ValueError("좌석 수는 1 이상이어야 합니다.")
 
-        # 최소 50,000원은 현재 학습 기준이며, 팀 최종 정책은 미정이다.
-        if type(self.price) is not int or self.price < 50000:
-            raise ValueError("가격은 50000 이상이어야 합니다.")
+        if type(self.price) is not int or self.price < 0:
+            raise ValueError("가격은 0 이상이어야 합니다.")
 
     def remaining_seats(self, occupied_count: int) -> int:
         if type(occupied_count) is not int or occupied_count < 0:
@@ -53,7 +52,7 @@ class SeatInfo:
         cls,
         *,
         perf_id: int,
-        name: str,
+        name: SeatGrade,
         total_seat: int,
         price: int,
     ) -> "SeatInfo":
@@ -84,7 +83,7 @@ class SeatInfo:
                 seat_id=self.seat_id,
                 seat_seq=seat_seq,
                 # 초기 상태 AVAILABLE은 임시 기준이다.
-                status="AVAILABLE",
+                status=SeatStatus.AVAILABLE,
             )
             for seat_seq in seat_seqs
         ]

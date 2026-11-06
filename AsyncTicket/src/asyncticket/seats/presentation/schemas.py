@@ -1,6 +1,6 @@
 from decimal import Decimal
 from typing import Annotated
-
+from asyncticket.seats.domain.enums import SeatGrade, SeatStatus
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 SeatName = Annotated[str, StringConstraints(min_length=1, max_length=255)]
@@ -10,7 +10,7 @@ SeatPrice = Annotated[int, Field(strict=True, ge=50000, le=2147483647)]
 class SeatConfigurationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    name: SeatName
+    name: SeatGrade
     total_seat: int = Field(strict=True, gt=0, le=2147483647)
     price: SeatPrice
     seat_seqs: list[SeatName]
@@ -48,10 +48,10 @@ class SeatResponse(BaseModel):
     perf_seat_id: int
     seat_id: int
     perf_id: int
-    grade: str | None
+    grade: SeatGrade | None
     seat_seq: str | None
     price: int | None
-    status: str
+    status: SeatStatus
 
 
 class SeatListResponse(BaseModel):
