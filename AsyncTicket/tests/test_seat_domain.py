@@ -4,12 +4,13 @@ from dataclasses import FrozenInstanceError
 import unittest
 
 from asyncticket.seats.domain.seat_info import SeatInfo
+from asyncticket.seats.domain.enums import SeatGrade
 
 
 class SeatInfoTests(unittest.TestCase):
     def setUp(self):
         self.grade = SeatInfo(
-            seat_id=101, perf_id=10, name="R석", total_seat=30, price=55000
+            seat_id=101, perf_id=10, name=SeatGrade.R, total_seat=30, price=55000
         )
 
     def test_remaining_seats(self):
@@ -39,7 +40,7 @@ class SeatInfoTests(unittest.TestCase):
         for field in ("seat_id", "perf_id"):
             for value in (0, -1, True, "10"):
                 with self.subTest(field=field, value=value):
-                    values = dict(seat_id=101, perf_id=10, name="R석", total_seat=30, price=55000)
+                    values = dict(seat_id=101, perf_id=10, name=SeatGrade.R, total_seat=30, price=55000)
                     values[field] = value
                     with self.assertRaises(ValueError):
                         SeatInfo(**values)
@@ -48,7 +49,7 @@ class SeatInfoTests(unittest.TestCase):
         for field in ("total_seat", "price"):
             for value in (-1, True, "100"):
                 with self.subTest(field=field, value=value):
-                    values = dict(seat_id=101, perf_id=10, name="R석", total_seat=30, price=55000)
+                    values = dict(seat_id=101, perf_id=10, name=SeatGrade.R, total_seat=30, price=55000)
                     values[field] = value
                     with self.assertRaises(ValueError):
                         SeatInfo(**values)
@@ -60,20 +61,23 @@ class SeatInfoTests(unittest.TestCase):
     def test_each_required_configuration_field(self):
         for field, value in (("name", None), ("name", " "), ("total_seat", None), ("price", None)):
             with self.subTest(field=field, value=value):
-                values = dict(seat_id=101, perf_id=10, name="R석", total_seat=30, price=55000)
+                values = dict(seat_id=101, perf_id=10, name=SeatGrade.R, total_seat=30, price=55000)
                 values[field] = value
                 with self.assertRaises(ValueError):
                     SeatInfo(**values)
 
-    def test_current_learning_capacity_and_price_boundaries(self):
-        # 현재 학습 코드의 기준이며 팀 최종 가격 정책은 아니다.
-        for field, value in (("total_seat", 0), ("price", 0), ("price", 49999)):
+    def test_nonnegative_price_and_positive_capacity_boundaries(self):
+        for field, value in (("total_seat", 0), ("price", -1)):
             with self.subTest(field=field, value=value):
-                values = dict(seat_id=101, perf_id=10, name="R석", total_seat=30, price=50000)
+                values = dict(seat_id=101, perf_id=10, name=SeatGrade.R, total_seat=30, price=0)
                 values[field] = value
                 with self.assertRaises(ValueError):
                     SeatInfo(**values)
-        minimum = SeatInfo(seat_id=101, perf_id=10, name="R석", total_seat=1, price=50000)
+        minimum = SeatInfo(seat_id=101, perf_id=10, name=SeatGrade.R, total_seat=1, price=0)
+        for price in (0, 1, 49999):
+            with self.subTest(price=price):
+                grade = SeatInfo(seat_id=101, perf_id=10, name=SeatGrade.R, total_seat=1, price=price)
+                self.assertEqual(grade.price, price)
         self.assertEqual(minimum.remaining_seats(0), 1)
         self.assertEqual(minimum.remaining_seats(1), 0)
         with self.assertRaises(ValueError):

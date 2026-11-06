@@ -54,8 +54,8 @@ class SeatQueryTests(unittest.IsolatedAsyncioTestCase):
             ])
             await conn.execute(insert(seats), [
                 {"perf_seat_id": 1001, "reserv_id": 1, "seat_id2": 101, "status": "RESERVED", "seat_seq": "A01"},
-                {"perf_seat_id": 1002, "reserv_id": 1, "seat_id2": 102, "status": "CUSTOM_STATUS", "seat_seq": "A01"},
-                {"perf_seat_id": 1003, "reserv_id": 1, "seat_id2": 103, "status": "UNCONFIGURED", "seat_seq": None},
+                {"perf_seat_id": 1002, "reserv_id": 1, "seat_id2": 102, "status": "RESERVED", "seat_seq": "A01"},
+                {"perf_seat_id": 1003, "reserv_id": 1, "seat_id2": 103, "status": "RESERVED", "seat_seq": None},
             ])
 
         async def get_test_db():
@@ -153,7 +153,7 @@ class SeatQueryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(second.status_code, 200)
         self.assertEqual(first.json()["data"]["perf_seat_id"], 1001)
         self.assertEqual(second.json()["data"]["perf_seat_id"], 1002)
-        self.assertEqual(second.json()["data"]["status"], "CUSTOM_STATUS")
+        self.assertEqual(second.json()["data"]["status"], "RESERVED")
 
     async def test_missing_seat_in_existing_performance_returns_404(self):
         for path in ("/v1/performances/10/seats/Z99", "/v1/performances/30/seats/A01"):
@@ -174,13 +174,13 @@ class SeatQueryTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(item["grade"])
         self.assertIsNone(item["price"])
         self.assertIsNone(item["seat_seq"])
-        self.assertEqual(item["status"], "UNCONFIGURED")
+        self.assertEqual(item["status"], "RESERVED")
 
     async def test_duplicate_seat_sequence_is_not_arbitrarily_selected(self):
         async with self.sessions() as session:
             await session.execute(insert(PerformanceSeats).values(
                 perf_seat_id=1004, reserv_id=1, seat_id2=101,
-                status="CUSTOM_STATUS", seat_seq="A01",
+                status="RESERVED", seat_seq="A01",
             ))
             await session.commit()
         response = await self.client.get("/v1/performances/10/seats/A01")

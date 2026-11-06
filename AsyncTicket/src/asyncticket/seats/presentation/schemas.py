@@ -4,7 +4,7 @@ from asyncticket.seats.domain.enums import SeatGrade, SeatStatus
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 SeatName = Annotated[str, StringConstraints(min_length=1, max_length=255)]
-SeatPrice = Annotated[int, Field(strict=True, ge=50000, le=2147483647)]
+SeatPrice = Annotated[int, Field(strict=True, ge=0, le=2147483647)]
 
 
 class SeatConfigurationRequest(BaseModel):
