@@ -12,7 +12,7 @@
         - 예매 금액은 0원보다 커야 한다
         - 예매 기간 안에만 예매 (예매 시작일시 <= 현재(now) < 예매 마감 일시)
         - 판매 가능한 좌석만 예매할 수 있다 (좌석 도메인 assign_reservation에서 보장)
-        - (결제후)예매가 생성되면 바로 예매확정(CONFIRMED)
+        - (결제후)예매가 생성되면 바로 예매확정(CONFIRMED) (결제 성공 여부는 결제 도메인이 판단)
     3) 예매 조회
         - 본인 예매만 조회
         - 예매ID, 회원ID, 회차ID, 예매수량, 금액, 상태, 예매·확정·취소 일시를 확인할 수 있다
@@ -74,14 +74,16 @@ class ReservedPerformance:
 @dataclass(frozen=True, kw_only=True)
 class ReservedSeat:
     """예매한 좌석 정보 (performance_seats, seats_info)"""
-    reserved_seat_id: int
+    reserved_seat_id: int        
     reserved_seat_price: Decimal # 예매생성 : 예매 금액 = 좌석
 
 @dataclass(frozen=True, kw_only=True)
 class ReservedPayment:
     """예매결제 (payments)"""
-    reserved_pay_id:  int | None = None 
-
+    reserved_pay_id:  int | None = None
+    # is_paid: bool                 # 예매생성 : 결제 완료된 경우에만
+    # is_linked: bool               # 예매생성 : 다른 예매에 이미 쓰인 결제는 불가
+    # paid_amount: Decimal          # 예매생성 : 결제 금액 = 좌석 가격
 
 # 3. 엔터티
 @dataclass(kw_only=True)
@@ -129,7 +131,6 @@ class Reservation:
         seat:ReservedSeat,
         payment: ReservedPayment,
         order_number: str,
-        # checker: ReservationCheck,
         now: datetime) -> "Reservation": 
 
         # 예매생성 규칙
