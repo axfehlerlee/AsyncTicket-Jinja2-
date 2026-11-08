@@ -279,6 +279,7 @@ class SqlAlchemyPerformanceSeatRepository(PerformanceSeatRepository):
         )
         return (await self.session.scalar(stmt)) is not None
 
+    # 9) 현재 예매 조건부 UPDATE → 해제 성공 여부 반환
     async def release_reservation(
         self,
         *,

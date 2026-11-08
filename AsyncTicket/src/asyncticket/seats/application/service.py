@@ -266,6 +266,7 @@ class PerformanceSeatService:
         if not linked:
             raise SeatReservationConflictError("좌석을 예매에 연결할 수 없습니다.")
 
+    # 8) 현재 예매·좌석 상태 확인 후 연결 해제
     async def release_reservation(
         self, *, perf_id: int, perf_seat_id: int, reserv_id: int,
         expected_status: str, released_status: str,

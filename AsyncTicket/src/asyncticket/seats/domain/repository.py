@@ -82,6 +82,7 @@ class PerformanceSeatRepository(ABC):
     ) -> bool:
         pass
 
+    # 8) 현재 예매 연결이 일치하는 좌석만 해제
     @abstractmethod
     async def release_reservation(
         self,
