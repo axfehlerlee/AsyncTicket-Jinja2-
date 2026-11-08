@@ -39,10 +39,11 @@ class ReservedPerformanceReader(ABC):
         pass
 
 class ReservedSeatReader(ABC):
-    """좌석 정보(좌석, 가격)를 예매 VO로 가져온다 없으면 None"""
+    """좌석 정보(좌석, 가격)를 예매 VO로 가져온다. 해당 회차의 좌석이 아니면 None"""
     @abstractmethod
     async def get_reserved_seat(
         self,
+        perf_id: int,
         perf_seat_id: int,
     ) -> ReservedSeat | None : 
         pass
