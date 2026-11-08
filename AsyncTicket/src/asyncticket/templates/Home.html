@@ -2,25 +2,133 @@
 <html lang="ko">
 <head>
     <meta charset="utf-8">
-    <title>AsyncTicket</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AsyncTicket | 팀 A 데모</title>
+    <style>
+        body {
+            margin: 0;
+            background: #f4f6fa;
+            color: #172238;
+            font: 16px/1.6 system-ui, sans-serif;
+        }
+        main { max-width: 960px; margin: auto; padding: 3rem 1.25rem; }
+        header { margin-bottom: 2rem; }
+        h1 { margin: 0; font-size: clamp(2.25rem, 6vw, 4rem); line-height: 1.15; }
+        h2 { margin: 0 0 .5rem; font-size: 1.25rem; }
+        .eyebrow { margin: 0 0 .5rem; color: #31528e; font-weight: 700; }
+        .intro { margin: .75rem 0 0; }
+        .sections {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+            gap: 1rem;
+        }
+        section { padding: 1.25rem; border: 1px solid #d6deeb; border-radius: 1rem; background: white; }
+        ul { margin: .75rem 0 0; padding-left: 1.25rem; }
+        li + li { margin-top: .4rem; }
+        a { color: #244d9e; text-underline-offset: .2em; }
+        .note { margin: 0; color: #4b5871; font-size: .9rem; }
+        .examples { margin-top: .85rem; }
+    </style>
 </head>
 <body>
-    <h1>AsyncTicket</h1>
-    <p>{{ message }}</p>
-    <nav aria-label="회원 메뉴">
-        <ul>
-            <li><a href="/signup">회원가입</a></li>
-            <li><a href="/login">로그인</a></li>
-            <li><a href="/me">내 정보</a></li>
-        </ul>
-    </nav>
-    <nav aria-label="공연 메뉴">
-        <ul>
-            <li><a href="/venues">공연장 목록</a></li>
-            <li><a href="/shows">공연 목록</a></li>
-            <li><a href="/manage">공연장·공연 관리</a></li>
-            <li><a href="/reservations">예매·결제 안내</a></li>
-        </ul>
-    </nav>
+    <main>
+        <header>
+            <p class="eyebrow">팀 A · 기능 데모</p>
+            <h1>AsyncTicket</h1>
+            <p class="intro">{{ message }}</p>
+            <p class="intro">팀이 만든 회원, 공연, 좌석 기능을 한 화면에서 열어보세요.</p>
+        </header>
+
+        <div class="sections">
+            <section aria-labelledby="account-heading">
+                <h2 id="account-heading">회원</h2>
+                <p class="note">가입하고 로그인한 뒤 내 정보를 확인할 수 있어요.</p>
+                <ul>
+                    <li><a href="/signup">회원가입</a></li>
+                    <li><a href="/login">로그인</a></li>
+                    <li><a href="/me">내 정보 · 로그아웃</a></li>
+                </ul>
+            </section>
+
+            <section aria-labelledby="catalog-heading">
+                <h2 id="catalog-heading">공연 둘러보기</h2>
+                <p class="note">공연장부터 공연 회차와 좌석까지 살펴보세요.</p>
+                <ul>
+                    <li><a href="/venues">공연장 목록</a></li>
+                    <li><a href="/shows">공연 목록</a></li>
+                </ul>
+                <div class="examples">
+                    <p class="note" id="example-status" role="status">상세 화면 링크를 불러오는 중…</p>
+                    <ul id="example-links" aria-label="등록된 데이터 상세 화면" hidden></ul>
+                </div>
+            </section>
+
+            <section aria-labelledby="manage-heading">
+                <h2 id="manage-heading">판매자·관리자</h2>
+                <p class="note">판매자 또는 관리자 계정으로 로그인하면 등록·수정 화면을 사용할 수 있어요.</p>
+                <ul>
+                    <li><a href="/manage#venue-management">공연장 등록·수정</a></li>
+                    <li><a href="/manage#show-management">공연 등록·수정·삭제</a></li>
+                    <li><a href="/manage#performance-management">회차 등록·수정·삭제</a></li>
+                    <li><a href="/manage#seat-management">좌석 추가·가격 변경</a></li>
+                </ul>
+            </section>
+        </div>
+    </main>
+
+    <script>
+        async function readData(path) {
+            const response = await fetch(path);
+            if (!response.ok) throw new Error("목록을 불러올 수 없습니다.");
+            const { data } = await response.json();
+            return data;
+        }
+
+        async function loadExampleLinks() {
+            const links = document.querySelector("#example-links");
+            const status = document.querySelector("#example-status");
+
+            function addLink(path, title) {
+                const item = document.createElement("li");
+                const link = document.createElement("a");
+                link.href = path;
+                link.textContent = title;
+                item.append(link);
+                links.append(item);
+                links.hidden = false;
+            }
+
+            const [venueResult, showResult] = await Promise.allSettled([
+                readData("/v1/venues/list?page=1&page_size=1"),
+                readData("/v1/shows?page=1&size=1"),
+            ]);
+            const venue = venueResult.value?.[0];
+            const show = showResult.value?.items[0];
+            let failed = [venueResult, showResult].some(result => result.status === "rejected");
+
+            if (venue) addLink(`/venues/${venue.venues_id}`, `공연장 상세 · ${venue.name}`);
+
+            if (show) {
+                addLink(`/shows/${show.show_id}`, `공연 상세 · ${show.title}`);
+                try {
+                    const { items } = await readData(`/v1/shows/${show.show_id}/performances`);
+                    const performance = items[0];
+                    if (performance) {
+                        addLink(`/performances/${performance.perf_id}`, `회차·좌석 · ${performance.round_number}회차`);
+                    }
+                } catch {
+                    failed = true;
+                }
+            }
+
+            if (failed) {
+                status.textContent = "일부 상세 링크를 불러오지 못했어요. 위 목록에서 확인할 수 있어요.";
+            } else {
+                status.textContent = links.hidden ? "데이터를 등록하면 상세 화면 링크가 표시돼요." : "";
+            }
+        }
+
+        loadExampleLinks();
+    </script>
 </body>
 </html>
