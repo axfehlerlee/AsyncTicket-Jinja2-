@@ -1,3 +1,6 @@
+# <응용 서비스 - 좌석 처리 순서 조율>
+# - 구성·가격 변경은 이 서비스가 commit/rollback한다. 예매 연결·해제는 예매 호출부가 트랜잭션을 맡는다.
+
 from dataclasses import replace
 from datetime import datetime, timezone
 
@@ -33,6 +36,7 @@ class SeatInfoService:
         self.performance_seat_repository = performance_seat_repository
         self.policy = policy
 
+    # 1) 좌석 등급 조회, 없으면 404
     async def get_seat_info(self, seat_id: int) -> SeatInfo:
         seat_info = await self.repository.get_seat_info(seat_id)
         if seat_info is None:
@@ -41,6 +45,7 @@ class SeatInfoService:
             )
         return seat_info
 
+    # 2) 기존 등급의 가격만 저장·확정
     async def save_seat_info(self, seat_info: SeatInfo) -> SeatInfo:
         try:
             if seat_info.seat_id is None:
@@ -68,6 +73,7 @@ class SeatInfoService:
             await self.repository.rollback()
             raise
 
+    # 3) 등급 잔여 수량으로 요청 가능 여부 검사
     async def check_seat_availability(
         self,
         seat_id: int,
@@ -77,6 +83,7 @@ class SeatInfoService:
         seat_info = await self.get_seat_info(seat_id)
         seat_info.require_capacity(quantity, occupied_count)
 
+    # 4) 기존 호출부용 수량 검사 진입점
     async def check_capacity(
         self,
         seat_id: int,
@@ -85,6 +92,7 @@ class SeatInfoService:
     ) -> None:
         await self.check_seat_availability(seat_id, quantity, occupied_count)
 
+    # 5) 등급 저장 → 개별 좌석 저장 → 함께 확정
     async def create_seat_configuration(
         self,
         seat_info: SeatInfo,
@@ -117,6 +125,7 @@ class SeatInfoService:
             await self.repository.rollback()
             raise
 
+    # 6) 판매자·소유자·판매 시작 시각 검사
     async def _authorize(self, perf_id: int, actor: CatalogActor) -> None:
         self.policy.authorize(actor)
         if not await self.repository.lock_performance(perf_id):
@@ -150,6 +159,7 @@ class SeatInfoService:
                 error_code="SEAT_SALE_STARTED",
             )
 
+    # 7) 권한 확인 후 좌석 구성 생성
     async def create(
         self,
         seat_info: SeatInfo,
@@ -163,6 +173,7 @@ class SeatInfoService:
             await self.repository.rollback()
             raise
 
+    # 8) 권한 확인 후 기존 등급 가격 수정
     async def update_price(
         self,
         perf_id: int,
@@ -193,16 +204,19 @@ class PerformanceSeatService:
         self.repository = repository
         self.seat_info_repository = seat_info_repository
 
+    # 1) 회차 존재 여부 검사
     async def _require_performance(self, perf_id: int) -> None:
         if not await self.seat_info_repository.performance_exists(perf_id):
             raise NotFoundException(
                 "공연 회차를 찾을 수 없습니다.", error_code="PERFORMANCE_NOT_FOUND"
             )
 
+    # 2) 회차 확인 후 좌석 목록 조회
     async def list_performance_seats(self, perf_id: int) -> list[dict[str, object]]:
         await self._require_performance(perf_id)
         return await self.repository.list_performance_seats(perf_id)
 
+    # 3) 좌석 등급 조회, 없으면 404
     async def get_seat_info(self, perf_id: int, seat_id: int) -> dict[str, object]:
         grade = await self.seat_info_repository.get_seat_info_view(perf_id, seat_id)
         if grade is None:
@@ -212,6 +226,7 @@ class PerformanceSeatService:
             )
         return grade
 
+    # 4) 좌석명으로 상세 조회, 중복 데이터는 서버 오류
     async def get_performance_seat(
         self, perf_id: int, seat_seq: str
     ) -> dict[str, object]:
@@ -230,6 +245,7 @@ class PerformanceSeatService:
             )
         return seat
 
+    # 6) 본인 예매의 좌석 조회
     async def get_reservation_seats(
         self, reserv_id: int, user_id: int
     ) -> dict[str, object]:
@@ -249,6 +265,7 @@ class PerformanceSeatService:
             )
         return reservation
 
+    # 7) 같은 세션에서 발급받은 예매 ID로 좌석 연결
     async def assign_reservation(
         self, *, perf_id: int, perf_seat_id: int, reserv_id: int,
         expected_status: str, reserved_status: str,

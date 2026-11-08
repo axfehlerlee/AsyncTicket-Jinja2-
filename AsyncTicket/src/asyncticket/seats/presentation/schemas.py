@@ -1,3 +1,6 @@
+# <표현 계층 - 좌석 요청·응답 형식>
+# - 요청은 자료형·범위를 검사하고, 응답 모델은 APIResponse의 data에 담는다.
+
 from decimal import Decimal
 from typing import Annotated
 from asyncticket.seats.domain.enums import SeatGrade, SeatStatus
@@ -15,6 +18,7 @@ class SeatConfigurationRequest(BaseModel):
     price: SeatPrice
     seat_seqs: list[SeatName]
 
+    # 1) 좌석명·수량·중복 입력 검사
     @model_validator(mode="after")
     def validate_names(self):
         if not self.name.strip() or any(not name.strip() for name in self.seat_seqs):
