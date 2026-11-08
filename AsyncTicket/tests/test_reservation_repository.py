@@ -36,7 +36,7 @@ from asyncticket.reservations.domain.reservation import (
 from asyncticket.reservations.infrastructure.models import ReservationModel
 from asyncticket.reservations.infrastructure.repositories import SqlAlchemyReservationRepository
 from asyncticket.performances.infrastructure.models import PerformanceModel
-from asyncticket.performance_seats.infrastructure.models import PerformanceSeats
+from asyncticket.seats.infrastructure.models import PerformanceSeats
 from asyncticket.payment.infrastructure.models import Payment as PaymentModel
 
 UTC = timezone.utc
