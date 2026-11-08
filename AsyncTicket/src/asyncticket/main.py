@@ -28,6 +28,25 @@ from asyncticket.auth.presentation.routers.v1.router import (
 from asyncticket.users.presentation.router.v1.router import (
     router as users_router,
 )
+<<<<<<< Updated upstream
+=======
+from asyncticket.shared.core.exception_handlers import (
+    register_exception_handlers,
+)
+
+from asyncticket.auth.infrastructure.security import (
+    JwtTokenProvider,
+)
+from asyncticket.shared.core.database import (
+    AsyncSessionLocal,
+)
+from asyncticket.wiring.catalog_auth import (
+    JwtCatalogAuthenticator,
+)
+
+
+from asyncticket.wiring import wire_dependencies
+>>>>>>> Stashed changes
 # 이 파일에서 사용할 로거 (로그에 "app.main"이라는 이름으로 표시됨)
 logger = get_logger("app.main")
 
@@ -73,6 +92,9 @@ def create_app(
     app.include_router(show_router)
     app.include_router(performance_router)
 
+<<<<<<< Updated upstream
+
+>>>>>>> Stashed changes
     app.include_router(venue_router)
 
     # 인증/사용자 관련 라우터를 등록한다.
