@@ -26,6 +26,7 @@ from asyncticket.performances.infrastructure.models import PerformanceModel
 
 # <InfraStructure - 좌석>
 from asyncticket.seats.infrastructure.repositories import SqlAlchemyPerformanceSeatRepository
+from asyncticket.users.infrastructure.models import UserModel
 
 
 # ---------- 기준 1 : 외부 데이터 참고 ----------
@@ -33,12 +34,22 @@ from asyncticket.seats.infrastructure.repositories import SqlAlchemyPerformanceS
 class SqlAlchemyReservationChecker(ReservationChecker):
     """한 회원은 한 회차에 예매대기·예매확정 예매를 1건만 가질 수 있다 (취소하면 다시 가능)"""
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession, *, lock_ticketholder: bool = False):
         self.session = session
+        self.lock_ticketholder = lock_ticketholder
 
     async def is_reserv_possible(self,
                                  ticketholder_id: int,
                                  perf_id: int) -> bool:
+        if self.lock_ticketholder:
+            # 예매를 생성하는 요청만 직렬화한다. PostgreSQL 기본 READ COMMITTED에서
+            # 대기하던 요청은 아래 별도 SELECT로 앞선 요청의 커밋 결과를 읽는다.
+            await self.session.execute(
+                select(UserModel.user_id)
+                .where(UserModel.user_id == ticketholder_id)
+                .with_for_update(key_share=True)
+            )
+
         # ① 이 회원 + 이 회차 + 진행 중(대기·확정)인 예매가 있는지 찾기
         statement = (
             select(ReservationModel.reserv_id)
