@@ -1,0 +1,40 @@
+{% extends "catalog_base.html" %}
+{% block title %}공연장 목록{% endblock %}
+{% block content %}
+<h1>공연장 목록</h1>
+<p id="venues-status" role="status">공연장을 불러오는 중…</p>
+<ul id="venues-list"></ul>
+<p><a id="previous" hidden>이전</a> <a id="next" hidden>다음</a></p>
+<p><a href="/manage#venue-management">공연장 관리</a></p>
+{% endblock %}
+{% block script %}
+<script>
+    async function loadVenues() {
+        const status = document.querySelector("#venues-status");
+        const list = document.querySelector("#venues-list");
+        const page = Math.max(1, Number(new URLSearchParams(location.search).get("page")) || 1);
+        const size = 20;
+        try {
+            const venues = await requestApi(`/v1/venues/list?page=${page}&page_size=${size}`);
+            for (const venue of venues) {
+                addLink(list, venue.name, `/venues/${venue.venues_id}`, venue.address);
+            }
+            if (page > 1) {
+                const previous = document.querySelector("#previous");
+                previous.href = `?page=${page - 1}`;
+                previous.hidden = false;
+            }
+            if (venues.length === size) {
+                const next = document.querySelector("#next");
+                next.href = `?page=${page + 1}`;
+                next.hidden = false;
+            }
+            status.textContent = venues.length ? "" : (page === 1 ? "등록된 공연장이 없습니다." : "이 페이지에 공연장이 없습니다.");
+        } catch (error) {
+            status.textContent = error.message;
+        }
+    }
+
+    loadVenues();
+</script>
+{% endblock %}

@@ -1,0 +1,242 @@
+{% extends "catalog_base.html" %}
+{% block title %}공연장·공연 관리{% endblock %}
+
+{% macro field(label, name, kind="text", minimum=none, required=false) %}
+<p><label>{{ label }}
+    <input name="{{ name }}" type="{{ kind }}"{% if minimum is not none %} min="{{ minimum }}"{% endif %}{% if required %} required{% endif %}>
+</label></p>
+{% endmacro %}
+
+{% macro actions(delete=false) %}
+<p><label>작업
+    <select name="operation">
+        <option value="POST">등록</option>
+        <option value="PATCH">수정</option>
+        {% if delete %}<option value="DELETE">삭제</option>{% endif %}
+    </select>
+</label></p>
+{% endmacro %}
+
+{% macro submit() %}
+<button type="submit">실행</button>
+<p class="form-result" role="status"></p>
+{% endmacro %}
+
+{% block content %}
+<h1>공연장·공연 관리</h1>
+<p id="management-status" role="status">관리 권한을 확인하는 중…</p>
+<p id="management-login" hidden><a href="/login">로그인</a></p>
+
+<div id="management-forms" hidden>
+    <p>수정과 삭제에는 기존 항목의 ID를 입력하세요. 목록에서 상세 화면을 열면 주소 끝에서 ID를 확인할 수 있습니다.</p>
+
+    <details id="venue-management">
+        <summary>공연장 등록·수정</summary>
+        <form data-resource="venue">
+            {{ actions() }}
+            {{ field("공연장 ID (수정 시)", "venues_id", "number", 1) }}
+            {{ field("이름", "name", required=true) }}
+            {{ field("주소", "address", required=true) }}
+            {{ field("상세 주소", "address_detail") }}
+            {{ field("우편번호 (등록 시 필수)", "post_no") }}
+            {{ submit() }}
+        </form>
+    </details>
+
+    <details id="show-management">
+        <summary>공연 등록·수정·삭제</summary>
+        <form data-resource="show">
+            {{ actions(delete=true) }}
+            {{ field("공연 ID (수정·삭제 시)", "_id", "number", 1) }}
+            {{ field("공연장 ID", "venues_id", "number", 1) }}
+            {{ field("제목", "title") }}
+            {{ field("공연 분류", "type") }}
+            {{ field("공연 소개", "description") }}
+            {{ field("출연자", "performer") }}
+            {{ field("공연 시간(분)", "runtime", "number", 1) }}
+            {{ submit() }}
+        </form>
+    </details>
+
+    <details id="performance-management">
+        <summary>회차 등록·수정·삭제</summary>
+        <form data-resource="performance">
+            {{ actions(delete=true) }}
+            {{ field("공연 ID (등록 시)", "_show_id", "number", 1) }}
+            {{ field("회차 ID (수정·삭제 시)", "_id", "number", 1) }}
+            {{ field("회차 번호", "round_number", "number", 1) }}
+            {{ field("공연 시작 (한국 시간)", "starts_at", "datetime-local") }}
+            {{ field("공연 종료 (한국 시간)", "ends_at", "datetime-local") }}
+            {{ field("예매 시작 (한국 시간)", "booking_opens_at", "datetime-local") }}
+            {{ field("예매 마감 (한국 시간)", "booking_closes_at", "datetime-local") }}
+            {{ field("1인당 최대 매수", "max_tickets_per_user", "number", 1) }}
+            {{ field("운영 상태", "status") }}
+            {{ submit() }}
+        </form>
+    </details>
+
+    <details id="seat-management">
+        <summary>좌석 등급 구성·가격 변경</summary>
+        <form data-resource="seat">
+            {{ actions() }}
+            {{ field("회차 ID", "_perf_id", "number", 1, required=true) }}
+            {{ field("좌석 등급 ID (가격 수정 시)", "_id", "number", 1) }}
+            <p><label>등급 (등록 시)
+                <select name="name">
+                    <option value="">선택</option>
+                    <option value="R석">R석</option>
+                    <option value="S석">S석</option>
+                </select>
+            </label></p>
+            {{ field("좌석명 (등록 시, 쉼표로 구분)", "seat_seqs") }}
+            {{ field("가격(원)", "price", "number", 0, required=true) }}
+            {{ submit() }}
+        </form>
+    </details>
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+    const token = sessionStorage.getItem("asyncticket_access_token");
+    const authHeaders = { Authorization: `Bearer ${token}` };
+    const managementStatus = document.querySelector("#management-status");
+
+    function showLogin() {
+        managementStatus.textContent = "판매자 또는 관리자 계정으로 로그인해 주세요.";
+        document.querySelector("#management-login").hidden = false;
+        document.querySelector("#management-forms").hidden = true;
+    }
+
+    async function checkRole() {
+        if (!token) {
+            showLogin();
+            return;
+        }
+
+        try {
+            const user = await requestApi("/v1/users/me", { headers: authHeaders });
+            if (!["SELLER", "ADMIN"].includes(user.role)) {
+                showLogin();
+                return;
+            }
+
+            document.querySelector("#management-forms").hidden = false;
+            const section = document.getElementById(location.hash.slice(1));
+            if (section instanceof HTMLDetailsElement) section.open = true;
+            managementStatus.textContent = "";
+        } catch (error) {
+            if (error.status === 401) {
+                sessionStorage.removeItem("asyncticket_access_token");
+                showLogin();
+            } else {
+                managementStatus.textContent = error.message;
+            }
+        }
+    }
+
+    function readFields(form) {
+        const fields = {};
+        for (const [key, raw] of new FormData(form)) {
+            if (key === "operation" || key.startsWith("_")) continue;
+            const value = raw.trim();
+            if (!value) continue;
+
+            const input = form.elements.namedItem(key);
+            if (input.type === "number") {
+                fields[key] = Number(value);
+            } else if (input.type === "datetime-local") {
+                fields[key] = `${value}+09:00`;
+            } else {
+                fields[key] = value;
+            }
+        }
+        return fields;
+    }
+
+    function requiredId(form, key, label) {
+        const value = form.elements.namedItem(key).value;
+        if (!/^[1-9]\d*$/.test(value)) throw new Error(`${label}를 입력해 주세요.`);
+        return value;
+    }
+
+    function buildRequest(form, method) {
+        const fields = readFields(form);
+        const creating = method === "POST";
+
+        switch (form.dataset.resource) {
+            case "venue":
+                if (creating) {
+                    delete fields.venues_id;
+                    fields.address_detail ??= null;
+                } else {
+                    requiredId(form, "venues_id", "공연장 ID");
+                    fields.address_detail ??= null;
+                }
+                return { url: "/v1/venues", fields };
+            case "show":
+                return {
+                    url: creating ? "/v1/shows" : `/v1/shows/${requiredId(form, "_id", "공연 ID")}`,
+                    fields,
+                };
+            case "performance":
+                return {
+                    url: creating
+                        ? `/v1/shows/${requiredId(form, "_show_id", "공연 ID")}/performances`
+                        : `/v1/performances/${requiredId(form, "_id", "회차 ID")}`,
+                    fields,
+                };
+            case "seat": {
+                const base = `/v1/performances/${requiredId(form, "_perf_id", "회차 ID")}/seat-infos`;
+                if (!creating) {
+                    return {
+                        url: `${base}/${requiredId(form, "_id", "좌석 등급 ID")}`,
+                        fields: { price: fields.price },
+                    };
+                }
+                const names = (fields.seat_seqs || "").split(",").map(name => name.trim()).filter(Boolean);
+                return {
+                    url: base,
+                    fields: { name: fields.name, price: fields.price, total_seat: names.length, seat_seqs: names },
+                };
+            }
+        }
+    }
+
+    for (const form of document.querySelectorAll("form[data-resource]")) {
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            const result = form.querySelector(".form-result");
+            const button = form.querySelector('button[type="submit"]');
+            const method = form.elements.namedItem("operation").value;
+            if (method === "DELETE" && !window.confirm("이 항목을 삭제할까요?")) return;
+
+            button.disabled = true;
+            result.textContent = "처리 중…";
+            try {
+                const { url, fields } = buildRequest(form, method);
+                const options = { method, headers: authHeaders };
+                if (method !== "DELETE") {
+                    options.headers = { ...authHeaders, "Content-Type": "application/json" };
+                    options.body = JSON.stringify(fields);
+                }
+
+                const saved = await requestApi(url, options);
+                const idFields = { venue: "venues_id", show: "show_id", performance: "perf_id", seat: "seat_id" };
+                const id = saved?.[idFields[form.dataset.resource]];
+                result.textContent = id ? `처리했습니다. ID: ${id}` : "처리했습니다.";
+            } catch (error) {
+                result.textContent = error.message;
+                if (error.status === 401) {
+                    sessionStorage.removeItem("asyncticket_access_token");
+                    showLogin();
+                }
+            } finally {
+                button.disabled = false;
+            }
+        });
+    }
+
+    checkRole();
+</script>
+{% endblock %}

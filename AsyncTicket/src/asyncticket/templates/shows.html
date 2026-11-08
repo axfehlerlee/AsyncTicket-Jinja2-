@@ -1,0 +1,42 @@
+{% extends "catalog_base.html" %}
+{% block title %}공연 목록{% endblock %}
+{% block content %}
+<h1>공연 목록</h1>
+<p id="shows-status" role="status">공연을 불러오는 중…</p>
+<ul id="shows-list"></ul>
+<p><a id="previous" hidden>이전</a> <a id="next" hidden>다음</a></p>
+<p><a href="/manage#show-management">공연 관리</a></p>
+{% endblock %}
+{% block script %}
+<script>
+    async function loadShows() {
+        const status = document.querySelector("#shows-status");
+        const list = document.querySelector("#shows-list");
+        const query = new URLSearchParams(location.search);
+        const page = Math.max(1, Number(query.get("page")) || 1);
+        const params = new URLSearchParams({ page, size: 20 });
+        if (query.has("venue_id")) params.set("venues_id", query.get("venue_id"));
+
+        function setPageLink(id, number) {
+            const link = document.querySelector(id);
+            query.set("page", number);
+            link.href = `?${query}`;
+            link.hidden = false;
+        }
+
+        try {
+            const { items, size, total } = await requestApi(`/v1/shows?${params}`);
+            for (const show of items) {
+                addLink(list, show.title, `/shows/${show.show_id}`, show.type);
+            }
+            if (page > 1) setPageLink("#previous", page - 1);
+            if (page * size < total) setPageLink("#next", page + 1);
+            status.textContent = items.length ? "" : "표시할 공연이 없습니다.";
+        } catch (error) {
+            status.textContent = error.message;
+        }
+    }
+
+    loadShows();
+</script>
+{% endblock %}

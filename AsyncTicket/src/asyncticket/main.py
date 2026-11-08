@@ -20,6 +20,7 @@ from asyncticket.shared.core.models import Base, init_models
 from asyncticket.shared.domain.catalog import CatalogAuthenticator, CatalogPolicy
 from asyncticket.shared.presentation.catalog_http import register_catalog_errors
 from asyncticket.shows.presentation.router import router as show_router
+from asyncticket.web import router as web_router
 from asyncticket.wiring import wire_dependencies
 from asyncticket.venues.presentation.routers.v1.router import router as venue_router
 
@@ -82,6 +83,7 @@ def create_app(
     app.include_router(auth_router)
     app.include_router(users_router)
     app.include_router(seat_router)
+    app.include_router(web_router)
     return app
 
 

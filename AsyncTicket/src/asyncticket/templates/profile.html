@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <title>내 정보 | AsyncTicket</title>
+</head>
+<body>
+    <h1>내 정보</h1>
+
+    <p id="profile-status" role="status">회원 정보를 불러오는 중…</p>
+
+    <dl id="profile-details" hidden>
+        <dt>회원 ID</dt>
+        <dd id="profile-user-id"></dd>
+
+        <dt>이름</dt>
+        <dd id="profile-name"></dd>
+
+        <dt>이메일</dt>
+        <dd id="profile-email"></dd>
+
+        <dt>전화번호</dt>
+        <dd id="profile-phone"></dd>
+    </dl>
+    <p><button id="logout-button" type="button">로그아웃</button></p>
+    <p><a href="/">홈으로</a></p>
+    <script>
+                const logoutButton = document.querySelector("#logout-button");
+
+        logoutButton.addEventListener("click", async () => {
+            const status = document.querySelector("#profile-status");
+            const token = sessionStorage.getItem("asyncticket_access_token");
+            logoutButton.disabled = true;
+
+            try {
+                if (token) {
+                    const response = await fetch("/v1/auth/logout", {
+                        method: "POST",
+                        headers: { Authorization: `Bearer ${token}` },
+                    });
+
+                    if (!response.ok && response.status !== 401) {
+                        status.textContent = "로그아웃에 실패했습니다. 다시 시도해 주세요.";
+                        return;
+                    }
+                }
+
+                sessionStorage.removeItem("asyncticket_access_token");
+                window.location.replace("/login");
+            } catch {
+                status.textContent = "서버에 연결할 수 없습니다. 다시 시도해 주세요.";
+            } finally {
+                logoutButton.disabled = false;
+            }
+        });
+
+        async function loadProfile() {
+            const status = document.querySelector("#profile-status");
+            const token = sessionStorage.getItem("asyncticket_access_token");
+
+            if (!token) {
+                window.location.replace("/login");
+                return;
+            }
+
+            try {
+                const response = await fetch("/v1/users/me", {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+
+                if (response.status === 401) {
+                    sessionStorage.removeItem("asyncticket_access_token");
+                    window.location.replace("/login");
+                    return;
+                }
+
+                if (!response.ok) {
+                    status.textContent = "회원 정보를 불러오지 못했습니다.";
+                    return;
+                }
+
+                const { data: user } = await response.json();
+                document.querySelector("#profile-user-id").textContent = user.user_id;
+                document.querySelector("#profile-name").textContent = user.name;
+                document.querySelector("#profile-email").textContent = user.email;
+                document.querySelector("#profile-phone").textContent = user.phone_number;
+                document.querySelector("#profile-details").hidden = false;
+                status.textContent = "";
+            } catch {
+                status.textContent = "회원 정보를 불러오지 못했습니다.";
+            }
+        }
+
+        loadProfile();
+    </script>
+</body>
+</html>

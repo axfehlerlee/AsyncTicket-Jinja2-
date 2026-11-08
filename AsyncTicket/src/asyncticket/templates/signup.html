@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <title>회원가입 | AsyncTicket</title>
+</head>
+<body>
+    <h1>회원가입</h1>
+
+    <form action="/signup" method="post">
+        <p>
+            <label for="email">이메일</label>
+            <input id="email" name="email" type="email" autocomplete="email" required>
+        </p>
+        <p>
+            <label for="name">이름</label>
+            <input id="name" name="name" autocomplete="name"
+                   minlength="2" maxlength="20" required>
+        </p>
+        <p>
+            <label for="password">비밀번호 (8자 이상)</label>
+            <input id="password" name="password" type="password"
+                   autocomplete="new-password" minlength="8" maxlength="128" required>
+        </p>
+        <p>
+            <label for="phone_number">전화번호</label>
+            <input id="phone_number" name="phone_number" type="tel"
+                   autocomplete="tel" maxlength="30" required>
+        </p>
+        <button type="submit">가입하기</button>
+    </form>
+
+    <p><a href="/">홈으로</a></p>
+    <p id="signup-result" role="status"></p>
+
+    <script>
+        const form = document.querySelector("form");
+        const button = form.querySelector('button[type="submit"]');
+        const result = document.querySelector("#signup-result");
+
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            const values = Object.fromEntries(new FormData(form));
+            button.disabled = true;
+            result.textContent = "가입 처리 중…";
+
+            try {
+                const response = await fetch("/v1/users", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(values),
+                });
+                const data = await response.json().catch(() => null);
+
+                if (response.status === 201) {
+                    result.textContent = "회원가입이 완료되었습니다.";
+                    form.reset();
+                } else {
+                    result.textContent = data?.message ?? "회원가입에 실패했습니다.";
+                }
+            } catch {
+                result.textContent = "서버에 연결할 수 없습니다.";
+            } finally {
+                button.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

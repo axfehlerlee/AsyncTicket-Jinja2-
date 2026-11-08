@@ -1,0 +1,54 @@
+{% extends "catalog_base.html" %}
+{% block title %}공연 상세{% endblock %}
+{% block content %}
+<h1 id="show-title">공연 상세</h1>
+<p id="show-status" role="status">공연을 불러오는 중…</p>
+<p id="show-description"></p>
+<p id="show-meta"></p>
+<p><a id="show-venue" hidden>공연장 보기</a></p>
+
+<h2>회차</h2>
+<p id="performance-status" role="status"></p>
+<ul id="performance-list"></ul>
+<p><a href="/shows">공연 목록</a></p>
+{% endblock %}
+{% block script %}
+<script>
+    async function loadShow() {
+        const status = document.querySelector("#show-status");
+        const performanceStatus = document.querySelector("#performance-status");
+        const url = "/v1/shows/{{ show_id }}";
+
+        try {
+            const show = await requestApi(url);
+            document.querySelector("#show-title").textContent = show.title;
+            document.querySelector("#show-description").textContent = show.description || "";
+            document.querySelector("#show-meta").textContent = [
+                show.type, show.performer, show.runtime ? `${show.runtime}분` : "",
+            ].filter(Boolean).join(" · ");
+            const venue = document.querySelector("#show-venue");
+            venue.href = `/venues/${show.venues_id}`;
+            venue.hidden = false;
+            status.textContent = "";
+        } catch (error) {
+            status.textContent = error.message;
+            return;
+        }
+
+        performanceStatus.textContent = "회차를 불러오는 중…";
+        try {
+            const { items } = await requestApi(`${url}/performances`);
+            const list = document.querySelector("#performance-list");
+            for (const performance of items) {
+                addLink(list, `${performance.round_number}회차`, `/performances/${performance.perf_id}`,
+                    formatDate(performance.starts_at));
+            }
+            performanceStatus.textContent = items.length ? "" : "등록된 회차가 없습니다.";
+        } catch (error) {
+            performanceStatus.textContent = error.message;
+        }
+    }
+
+    loadShow();
+</script>
+{% endblock %}

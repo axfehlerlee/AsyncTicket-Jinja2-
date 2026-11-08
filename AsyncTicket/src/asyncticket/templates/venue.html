@@ -1,0 +1,27 @@
+{% extends "catalog_base.html" %}
+{% block title %}공연장 상세{% endblock %}
+{% block content %}
+<h1 id="venue-name">공연장 상세</h1>
+<p id="venue-status" role="status">공연장을 불러오는 중…</p>
+<p id="venue-address"></p>
+<p><a href="/shows?venue_id={{ venue_id }}">이 공연장의 공연 보기</a></p>
+<p><a href="/venues">공연장 목록</a></p>
+{% endblock %}
+{% block script %}
+<script>
+    async function loadVenue() {
+        const status = document.querySelector("#venue-status");
+        try {
+            const venue = await requestApi("/v1/venues?venues_id={{ venue_id }}");
+            document.querySelector("#venue-name").textContent = venue.name;
+            document.querySelector("#venue-address").textContent =
+                [venue.address, venue.address_detail, venue.post_no].filter(Boolean).join(" · ");
+            status.textContent = "";
+        } catch (error) {
+            status.textContent = error.message;
+        }
+    }
+
+    loadVenue();
+</script>
+{% endblock %}

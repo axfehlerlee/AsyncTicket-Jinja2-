@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <title>로그인 | AsyncTicket</title>
+</head>
+<body>
+    <h1>로그인</h1>
+
+    <form id="login-form" method="post">
+        <p>
+            <label for="email">이메일</label>
+            <input id="email" name="email" type="email"
+                   autocomplete="username" required>
+        </p>
+        <p>
+            <label for="password">비밀번호</label>
+            <input id="password" name="password" type="password"
+                   autocomplete="current-password" required>
+        </p>
+        <button type="submit">로그인</button>
+    </form>
+
+    <p id="login-result" role="status"></p>
+    <p><a href="/signup">회원가입</a></p>
+    <script>
+        const form = document.querySelector("#login-form");
+        const button = form.querySelector('button[type="submit"]');
+        const result = document.querySelector("#login-result");
+
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            button.disabled = true;
+            result.textContent = "로그인 중…";
+
+            try {
+                const response = await fetch("/v1/auth/login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(Object.fromEntries(new FormData(form))),
+                });
+                const data = await response.json().catch(() => null);
+
+                if (response.ok && data?.code === "LOGIN_SUCCESS") {
+                    sessionStorage.setItem("asyncticket_access_token", data.data.access_token);
+window.location.assign("/me");
+                } else {
+                    result.textContent = data?.message ?? "로그인에 실패했습니다.";
+                }
+            } catch {
+                result.textContent = "서버에 연결할 수 없습니다.";
+            } finally {
+                button.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
