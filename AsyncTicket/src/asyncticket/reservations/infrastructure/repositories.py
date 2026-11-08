@@ -22,7 +22,7 @@ from asyncticket.reservations.domain.reservation import (Reservation, TicketHold
 from asyncticket.reservations.infrastructure.models import ReservationModel # 예매 모델 - 예매 테이블의 속성
 from asyncticket.payment.infrastructure.models import Payment as PaymentModel # 결제 모델
 # from asyncticket.seats.infrastructure.models import SeatsInfoModel # 좌석 모델
-from asyncticket.performance_seats.infrastructure.models import PerformanceSeats # 공연좌석 모델
+from asyncticket.seats.infrastructure.models import PerformanceSeats # 공연좌석 모델
 from asyncticket.performances.infrastructure.models import PerformanceModel # 공연 모델
 
 
