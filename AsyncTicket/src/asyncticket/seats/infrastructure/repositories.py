@@ -1,3 +1,6 @@
+# <인프라 - 좌석 저장소 구현>
+# - SQL 실행과 데이터 변환을 담당한다. 예매 연결·해제 메서드는 commit/flush/rollback을 하지 않는다.
+
 from sqlalchemy import (
     BigInteger,
     DateTime,
@@ -41,6 +44,7 @@ class SqlAlchemySeatInfoRepository(SeatInfoRepository):
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
+    # 1) 등급 SELECT → 도메인 변환
     async def get_seat_info(self, seat_id: int) -> SeatInfo | None:
         stmt = (
             select(SeatsInfoModel)
@@ -52,6 +56,7 @@ class SqlAlchemySeatInfoRepository(SeatInfoRepository):
         model = await self.session.scalar(stmt)
         return model.to_seat_info() if model is not None else None
 
+    # 2) 등급 INSERT/UPDATE → flush → 도메인 변환
     async def save_seat_info(self, seat_info: SeatInfo) -> SeatInfo:
         if seat_info.seat_id is None:
             model = SeatsInfoModel(
@@ -78,6 +83,7 @@ class SqlAlchemySeatInfoRepository(SeatInfoRepository):
         await self.session.refresh(model)
         return model.to_seat_info()
 
+    # 3) 같은 회차의 등급 존재 여부 조회
     async def grade_exists(self, perf_id: int, name: str) -> bool:
         stmt = select(
             exists().where(
@@ -87,6 +93,7 @@ class SqlAlchemySeatInfoRepository(SeatInfoRepository):
         )
         return bool(await self.session.scalar(stmt))
 
+    # 4) 회차 행 잠금 후 존재 여부 반환
     async def lock_performance(self, perf_id: int) -> bool:
         stmt = (
             select(performances.c.perf_id)
@@ -97,6 +104,7 @@ class SqlAlchemySeatInfoRepository(SeatInfoRepository):
         )
         return await self.session.scalar(stmt) is not None
 
+    # 5) 회차·등급 조건으로 조회용 데이터 반환
     async def get_seat_info_view(
         self, perf_id: int, seat_id: int
     ) -> dict[str, object] | None:
@@ -111,6 +119,7 @@ class SqlAlchemySeatInfoRepository(SeatInfoRepository):
         row = result.mappings().one_or_none()
         return dict(row) if row is not None else None
 
+    # 6) 회차 존재 여부 조회
     async def performance_exists(self, perf_id: int) -> bool:
         return bool(
             await self.session.scalar(
@@ -118,6 +127,7 @@ class SqlAlchemySeatInfoRepository(SeatInfoRepository):
             )
         )
 
+    # 7) 공연 소유자·회차 판매 시각 조회
     async def get_management_context(self, perf_id: int) -> dict[str, object] | None:
         stmt = (
             select(shows.c.user_id.label("owner_id"), performances.c.booking_opens_at)
@@ -130,9 +140,11 @@ class SqlAlchemySeatInfoRepository(SeatInfoRepository):
         row = result.mappings().one_or_none()
         return dict(row) if row is not None else None
 
+    # 8) 호출된 좌석 구성 트랜잭션 확정
     async def commit(self) -> None:
         await self.session.commit()
 
+    # 9) 호출된 좌석 구성 트랜잭션 취소
     async def rollback(self) -> None:
         await self.session.rollback()
 
@@ -142,6 +154,7 @@ class SqlAlchemyPerformanceSeatRepository(PerformanceSeatRepository):
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
+    # 1) 개별 좌석 INSERT → flush
     async def save_many(self, seats: list[PerformanceSeat]) -> None:
         if any(seat.perf_seat_id is not None for seat in seats):
             raise ValueError("좌석 목록 저장은 신규 좌석만 지원합니다.")
@@ -158,6 +171,7 @@ class SqlAlchemyPerformanceSeatRepository(PerformanceSeatRepository):
         )
         await self.session.flush()
 
+    # 2) 회차 내 좌석명 존재 여부 조회
     async def names_exist(self, perf_id: int, seat_seqs: list[str]) -> bool:
         stmt = select(
             exists(
@@ -173,6 +187,7 @@ class SqlAlchemyPerformanceSeatRepository(PerformanceSeatRepository):
         )
         return bool(await self.session.scalar(stmt))
 
+    # 3) 등급 JOIN으로 공통 좌석 조회문 구성
     @staticmethod
     def _seats():
         return select(
@@ -185,6 +200,7 @@ class SqlAlchemyPerformanceSeatRepository(PerformanceSeatRepository):
             PerformanceSeats.status,
         ).join(SeatsInfoModel, PerformanceSeats.seat_id2 == SeatsInfoModel.seat_id)
 
+    # 4) 회차별 좌석 목록 SELECT
     async def list_performance_seats(self, perf_id: int) -> list[dict[str, object]]:
         stmt = (
             self._seats()
@@ -194,6 +210,7 @@ class SqlAlchemyPerformanceSeatRepository(PerformanceSeatRepository):
         result = await self.session.execute(stmt)
         return [dict(row) for row in result.mappings()]
 
+    # 5) 좌석명 SELECT → 중복 검사 → 반환
     async def get_performance_seat(
         self, perf_id: int, seat_seq: str
     ) -> dict[str, object] | None:
@@ -211,6 +228,7 @@ class SqlAlchemyPerformanceSeatRepository(PerformanceSeatRepository):
             raise SeatLookupConflictError("회차 안에서 좌석명이 중복됩니다.")
         return dict(rows[0]) if rows else None
 
+    # 6) 본인 예매 확인 → 연결 좌석 목록 조회
     async def get_owned_reservation_seats(
         self,
         reserv_id: int,
@@ -241,6 +259,7 @@ class SqlAlchemyPerformanceSeatRepository(PerformanceSeatRepository):
             "items": items,
         }
 
+    # 7) 조건부 UPDATE → 연결 성공 여부 반환
     async def assign_reservation(
         self,
         *,
@@ -274,6 +293,48 @@ class SqlAlchemyPerformanceSeatRepository(PerformanceSeatRepository):
                 reserv_id=reserv_id,
                 status=reserved_status,
             )
+            .returning(PerformanceSeats.perf_seat_id)
+            .execution_options(synchronize_session=False)
+        )
+        return (await self.session.scalar(stmt)) is not None
+
+    # 8) 회차·좌석 PK SELECT → 한 건 또는 None
+    async def get_performance_seat_by_id(
+        self, perf_id: int, perf_seat_id: int,
+    ) -> dict[str, object] | None:
+        result = await self.session.execute(self._seats().where(
+            SeatsInfoModel.perf_id == perf_id,
+            PerformanceSeats.perf_seat_id == perf_seat_id,
+        ))
+        row = result.mappings().one_or_none()
+        return dict(row) if row else None
+
+    # 9) 현재 예매 조건부 UPDATE → 해제 성공 여부 반환
+    async def release_reservation(
+        self,
+        *,
+        perf_id: int,
+        perf_seat_id: int,
+        reserv_id: int,
+        expected_status: str,
+        released_status: str,
+    ) -> bool:
+        # 현재 연결된 예매까지 조건에 넣어 이전 예매의 늦은 해제 요청을 거절한다.
+        stmt = (
+            update(PerformanceSeats)
+            .where(
+                PerformanceSeats.perf_seat_id == perf_seat_id,
+                PerformanceSeats.reserv_id == reserv_id,
+                PerformanceSeats.status == expected_status,
+                PerformanceSeats.seat_id2.in_(
+                    select(SeatsInfoModel.seat_id).where(SeatsInfoModel.perf_id == perf_id)
+                ),
+                select(reservations.c.reserv_id).where(
+                    reservations.c.reserv_id == reserv_id,
+                    reservations.c.perf_id == perf_id,
+                ).exists(),
+            )
+            .values(reserv_id=None, status=released_status)
             .returning(PerformanceSeats.perf_seat_id)
             .execution_options(synchronize_session=False)
         )
