@@ -79,7 +79,7 @@ class PerformanceSeatRepository(ABC):
     async def get_performance_seat(self, perf_id: int, seat_seq: str) -> dict[str, object] | None:
         pass
 
-    # 6) 회원이 소유한 예매의 좌석 조회
+    # 5) 회원이 소유한 예매의 좌석 조회
     @abstractmethod
     async def get_owned_reservation_seats(
         self, reserv_id: int, user_id: int,
@@ -87,7 +87,7 @@ class PerformanceSeatRepository(ABC):
         pass
 
     # 예매 연결 성공은 True, 조건 불일치는 False로 반환한다.
-    # 7) 조건이 맞는 미연결 좌석에 예매 연결
+    # 6) 조건이 맞는 미연결 좌석에 예매 연결
     @abstractmethod
     async def assign_reservation(
         self,
@@ -100,10 +100,24 @@ class PerformanceSeatRepository(ABC):
     ) -> bool:
         pass
 
-    # 5) 회차·개별 좌석 ID로 예매용 조회
+    # 7) 회차·개별 좌석 ID로 예매용 조회
     @abstractmethod
     async def get_performance_seat_by_id(
         self, perf_id: int, perf_seat_id: int,
     ) -> dict[str, object] | None:
         """예매 연결에 쓰는 개별 좌석 ID로 회차·가격·현재 상태를 조회한다."""
+        pass
+
+    # 8) 현재 예매 연결이 일치하는 좌석만 해제
+    @abstractmethod
+    async def release_reservation(
+        self,
+        *,
+        perf_id: int,
+        perf_seat_id: int,
+        reserv_id: int,
+        expected_status: str,
+        released_status: str,
+    ) -> bool:
+        """현재 예매 연결과 상태가 일치할 때만 해제한다. 트랜잭션은 호출자가 맡는다."""
         pass
