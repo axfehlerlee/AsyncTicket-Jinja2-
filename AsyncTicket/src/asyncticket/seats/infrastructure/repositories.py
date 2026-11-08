@@ -278,3 +278,33 @@ class SqlAlchemyPerformanceSeatRepository(PerformanceSeatRepository):
             .execution_options(synchronize_session=False)
         )
         return (await self.session.scalar(stmt)) is not None
+
+    async def release_reservation(
+        self,
+        *,
+        perf_id: int,
+        perf_seat_id: int,
+        reserv_id: int,
+        expected_status: str,
+        released_status: str,
+    ) -> bool:
+        # 현재 연결된 예매까지 조건에 넣어 이전 예매의 늦은 해제 요청을 거절한다.
+        stmt = (
+            update(PerformanceSeats)
+            .where(
+                PerformanceSeats.perf_seat_id == perf_seat_id,
+                PerformanceSeats.reserv_id == reserv_id,
+                PerformanceSeats.status == expected_status,
+                PerformanceSeats.seat_id2.in_(
+                    select(SeatsInfoModel.seat_id).where(SeatsInfoModel.perf_id == perf_id)
+                ),
+                select(reservations.c.reserv_id).where(
+                    reservations.c.reserv_id == reserv_id,
+                    reservations.c.perf_id == perf_id,
+                ).exists(),
+            )
+            .values(reserv_id=None, status=released_status)
+            .returning(PerformanceSeats.perf_seat_id)
+            .execution_options(synchronize_session=False)
+        )
+        return (await self.session.scalar(stmt)) is not None

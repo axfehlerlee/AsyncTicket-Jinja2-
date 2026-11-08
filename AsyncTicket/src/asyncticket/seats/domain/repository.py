@@ -81,3 +81,16 @@ class PerformanceSeatRepository(ABC):
         reserved_status: str,
     ) -> bool:
         pass
+
+    @abstractmethod
+    async def release_reservation(
+        self,
+        *,
+        perf_id: int,
+        perf_seat_id: int,
+        reserv_id: int,
+        expected_status: str,
+        released_status: str,
+    ) -> bool:
+        """현재 예매 연결과 상태가 일치할 때만 해제한다. 트랜잭션은 호출자가 맡는다."""
+        pass

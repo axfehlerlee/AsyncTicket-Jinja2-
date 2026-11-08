@@ -265,3 +265,24 @@ class PerformanceSeatService:
         )
         if not linked:
             raise SeatReservationConflictError("좌석을 예매에 연결할 수 없습니다.")
+
+    async def release_reservation(
+        self, *, perf_id: int, perf_seat_id: int, reserv_id: int,
+        expected_status: str, released_status: str,
+    ) -> None:
+        """예매와 같은 세션에서 연결을 해제한다. 최종 commit은 예매가 맡는다.
+
+        취소·결제 실패 여부는 호출부가 판단하고, 연결 전후의 좌석 상태를 전달한다.
+        이미 다른 예매에 연결된 좌석은 이전 예매의 해제 요청으로 변경하지 않는다.
+        같은 세션에서 미리 로드한 좌석 ORM 객체는 호출부에서 refresh한 뒤 사용한다.
+        """
+        if min(perf_id, perf_seat_id, reserv_id) <= 0:
+            raise ValidationException("회차·좌석·예매 번호는 양수여야 합니다.", error_code="INVALID_SEAT_RESERVATION_ID")
+        if not expected_status or not released_status or expected_status == released_status:
+            raise ValidationException("해제 전후의 서로 다른 좌석 상태가 필요합니다.", error_code="INVALID_SEAT_STATUS_TRANSITION")
+        released = await self.repository.release_reservation(
+            perf_id=perf_id, perf_seat_id=perf_seat_id, reserv_id=reserv_id,
+            expected_status=expected_status, released_status=released_status,
+        )
+        if not released:
+            raise SeatReservationConflictError("좌석의 예매 연결을 해제할 수 없습니다.")
