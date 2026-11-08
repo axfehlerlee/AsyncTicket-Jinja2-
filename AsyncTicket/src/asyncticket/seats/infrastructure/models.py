@@ -1,3 +1,6 @@
+# <인프라 - 좌석 테이블 매핑>
+# - seats_info는 등급·가격, performance_seats는 개별 좌석·예매 FK를 저장한다.
+
 from sqlalchemy import BigInteger, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 from asyncticket.seats.domain.enums import SeatGrade, SeatStatus
@@ -24,6 +27,7 @@ class SeatsInfoModel(Base):
     total_seat: Mapped[int | None] = mapped_column(Integer, nullable=True)
     price: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    # 1) DB 행 → 좌석 등급 도메인 변환
     def to_seat_info(self) -> SeatInfo:
         if self.name is None:
             raise ValueError("좌석 등급명은 공백이 아닌 1~255자여야 합니다.")
@@ -61,6 +65,7 @@ class PerformanceSeats(Base):
     status: Mapped[str] = mapped_column(String(30), nullable=False)
     seat_seq: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
+    # 1) DB 행 → 개별 좌석 도메인 변환
     def to_performance_seat(self) -> PerformanceSeat:
         if self.seat_seq is None:
             raise ValueError("좌석명은 공백이 아닌 1~255자여야 합니다.")
