@@ -1,3 +1,6 @@
+# <도메인 - 좌석 등급 규칙>
+# - 회차·등급·수량·가격과 좌석명 규칙만 검사한다. DB 저장은 하지 않는다.
+
 from dataclasses import dataclass
 from asyncticket.seats.domain.enums import SeatGrade, SeatStatus
 from asyncticket.seats.domain.performanc_seat import PerformanceSeat
@@ -13,6 +16,7 @@ class SeatInfo:
     price: int
     seat_id: int | None = None
 
+    # 1) 등급을 만들 때 ID·등급·수량·가격 검사
     def __post_init__(self) -> None:
         if type(self.perf_id) is not int or self.perf_id <= 0:
             raise ValueError("회차 ID는 1 이상이어야 합니다.")
@@ -31,6 +35,7 @@ class SeatInfo:
         if type(self.price) is not int or self.price < 0:
             raise ValueError("가격은 0 이상이어야 합니다.")
 
+    # 2) 전체 좌석 수에서 점유 수를 빼 잔여 수 계산
     def remaining_seats(self, occupied_count: int) -> int:
         if type(occupied_count) is not int or occupied_count < 0:
             raise ValueError("점유 좌석 수는 음수일 수 없습니다.")
@@ -40,6 +45,7 @@ class SeatInfo:
 
         return self.total_seat - occupied_count
 
+    # 3) 요청 수량이 잔여 수량 이내인지 검사
     def require_capacity(self, quantity: int, occupied_count: int) -> None:
         if type(quantity) is not int or quantity <= 0:
             raise ValueError("요청 매수는 1 이상이어야 합니다.")
@@ -47,6 +53,7 @@ class SeatInfo:
         if quantity > self.remaining_seats(occupied_count):
             raise ValueError("남은 좌석이 부족합니다.")
 
+    # 4) 새 좌석 등급 생성
     @classmethod
     def create(
         cls,
@@ -63,6 +70,7 @@ class SeatInfo:
             price=price,
         )
 
+    # 5) 등급 수량과 좌석명 개수·중복 검사
     def validate_seat_names(self, seat_seqs: list[str]) -> None:
         if len(seat_seqs) != self.total_seat:
             raise ValueError("좌석명 개수와 등급 좌석 수가 일치해야 합니다.")
@@ -73,6 +81,7 @@ class SeatInfo:
         if len(set(seat_seqs)) != len(seat_seqs):
             raise ValueError("중복된 좌석명이 있습니다.")
 
+    # 6) 저장된 등급 ID로 개별 좌석 생성
     def create_seats(self, seat_seqs: list[str]) -> list[PerformanceSeat]:
         if self.seat_id is None:
             raise ValueError("등급을 먼저 저장해야 합니다.")
