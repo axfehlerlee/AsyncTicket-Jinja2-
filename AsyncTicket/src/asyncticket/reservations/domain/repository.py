@@ -3,7 +3,7 @@
     1) 예매를 저장 (예매생성은 reservation.py-Reservation에서)
     2) 예매 ID로 찾고
     3) 회원의 예매 목록을 찾고
-    4) 바뀐 상태(취소)를 저장
+    4) 바뀐 상태(취소, 확정)를 저장
 """
 
 from abc import ABC, abstractmethod
@@ -34,8 +34,8 @@ class ReservationRepository(ABC):
         pass
 
     @abstractmethod
-    async def reserv_cancel_update(
+    async def reserv_status_update(
         self,
         reservation:Reservation) -> None :
-        """4) 예매 취소 바뀐상태를 저장"""
+        """4) 예매 상태 변경(확정,취소)을 저장"""
         pass
