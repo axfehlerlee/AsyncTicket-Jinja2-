@@ -279,6 +279,7 @@ class SqlAlchemyPerformanceSeatRepository(PerformanceSeatRepository):
         )
         return (await self.session.scalar(stmt)) is not None
 
+    # 6) 회차·좌석 PK SELECT → 한 건 또는 None
     async def get_performance_seat_by_id(
         self, perf_id: int, perf_seat_id: int,
     ) -> dict[str, object] | None:

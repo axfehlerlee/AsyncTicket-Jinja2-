@@ -82,6 +82,7 @@ class PerformanceSeatRepository(ABC):
     ) -> bool:
         pass
 
+    # 5) 회차·개별 좌석 ID로 예매용 조회
     @abstractmethod
     async def get_performance_seat_by_id(
         self, perf_id: int, perf_seat_id: int,

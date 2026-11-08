@@ -266,6 +266,7 @@ class PerformanceSeatService:
         if not linked:
             raise SeatReservationConflictError("좌석을 예매에 연결할 수 없습니다.")
 
+    # 5) 예매에 사용할 개별 좌석 ID로 가격·상태 조회
     async def get_performance_seat_by_id(
         self, *, perf_id: int, perf_seat_id: int,
     ) -> dict[str, object]:
