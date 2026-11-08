@@ -81,3 +81,10 @@ class PerformanceSeatRepository(ABC):
         reserved_status: str,
     ) -> bool:
         pass
+
+    @abstractmethod
+    async def get_performance_seat_by_id(
+        self, perf_id: int, perf_seat_id: int,
+    ) -> dict[str, object] | None:
+        """예매 연결에 쓰는 개별 좌석 ID로 회차·가격·현재 상태를 조회한다."""
+        pass

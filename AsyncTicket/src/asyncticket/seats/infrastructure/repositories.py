@@ -278,3 +278,13 @@ class SqlAlchemyPerformanceSeatRepository(PerformanceSeatRepository):
             .execution_options(synchronize_session=False)
         )
         return (await self.session.scalar(stmt)) is not None
+
+    async def get_performance_seat_by_id(
+        self, perf_id: int, perf_seat_id: int,
+    ) -> dict[str, object] | None:
+        result = await self.session.execute(self._seats().where(
+            SeatsInfoModel.perf_id == perf_id,
+            PerformanceSeats.perf_seat_id == perf_seat_id,
+        ))
+        row = result.mappings().one_or_none()
+        return dict(row) if row else None
