@@ -282,3 +282,22 @@ class PerformanceSeatService:
         )
         if not linked:
             raise SeatReservationConflictError("좌석을 예매에 연결할 수 없습니다.")
+
+    # 5) 예매에 사용할 개별 좌석 ID로 가격·상태 조회
+    async def get_performance_seat_by_id(
+        self, *, perf_id: int, perf_seat_id: int,
+    ) -> dict[str, object]:
+        """예매 내부 조회용. 가격은 DB의 int/None 값을 반환하며 상태나 트랜잭션을 바꾸지 않는다.
+
+        조회 성공은 선점이 아니다. 연결 시 assign_reservation으로 조건을 다시 검사한다.
+        """
+        if any(type(value) is not int or not 0 < value <= 9223372036854775807
+               for value in (perf_id, perf_seat_id)):
+            raise ValidationException("회차·좌석 번호는 유효한 양수여야 합니다.", error_code="INVALID_SEAT_RESERVATION_ID")
+        await self._require_performance(perf_id)
+        seat = await self.repository.get_performance_seat_by_id(perf_id, perf_seat_id)
+        if seat is None:
+            raise NotFoundException(
+                "해당 회차의 좌석을 찾을 수 없습니다.", error_code="SEAT_NOT_FOUND",
+            )
+        return seat
