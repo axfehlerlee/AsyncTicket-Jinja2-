@@ -1,3 +1,6 @@
+# <도메인 - 개별 좌석 규칙>
+# - 개별 좌석의 ID·이름·상태·예매 참조 값만 검사한다. 결제·예매 상태는 판단하지 않는다.
+
 # 1 예매 전용 좌석 도메인 (PerformanceSeat)
 from asyncticket.seats.domain.enums import SeatStatus
 from dataclasses import dataclass
@@ -12,6 +15,7 @@ class PerformanceSeat:
     perf_seat_id: int | None = None
     reserv_id: int | None = None    
 
+    # 1) 개별 좌석을 만들 때 값 검사
     def __post_init__(self) -> None:
         if self.perf_seat_id is not None and (
             type(self.perf_seat_id) is not int or self.perf_seat_id <= 0
@@ -31,6 +35,7 @@ class PerformanceSeat:
         ):
             raise ValueError("예매 ID는 1 이상이어야 합니다.")
 
+    # 2) 공백·길이를 기준으로 좌석명 검사
     @staticmethod
     def validate_seat_seq(seat_seq: str) -> None:
         if not isinstance(seat_seq, str) or not seat_seq.strip() or len(seat_seq) > 255:
