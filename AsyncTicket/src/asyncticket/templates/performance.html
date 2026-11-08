@@ -1,19 +1,29 @@
 {% extends "catalog_base.html" %}
 {% block title %}회차와 좌석{% endblock %}
+{% block head %}{% include "catalog_detail_styles.html" %}{% endblock %}
 {% block content %}
-<h1 id="performance-title">회차 상세</h1>
-<p id="performance-status" role="status">회차를 불러오는 중…</p>
-<div id="performance-details" hidden>
-    <p id="performance-time"></p>
-    <p id="booking-time"></p>
-    <p id="performance-meta"></p>
-    <p><a id="performance-show">공연 상세로</a></p>
-    <h2>좌석 목록</h2>
-    <p>조회 화면에 표시된 좌석 상태는 확인 시점 기준이에요.</p>
-    <p id="seat-status" role="status">좌석을 불러오는 중…</p>
-    <ul id="seat-list"></ul>
-    <p id="seat-selection" role="status"></p>
-    <p><a href="/reservations">예매 안내</a></p>
+<div class="detail-page">
+    <header class="detail-header">
+        <p class="detail-kicker">02 — PERFORMANCE &amp; SEATS</p>
+        <h1 id="performance-title">회차 상세</h1>
+    </header>
+    <p id="performance-status" role="status">회차를 불러오는 중…</p>
+    <div id="performance-details" hidden>
+        <p id="performance-time"></p>
+        <p id="booking-time"></p>
+        <p id="performance-meta"></p>
+        <p><a id="performance-show">공연 상세로</a></p>
+        <h2>좌석 목록</h2>
+        <p><a href="/?performance_id={{ performance_id }}">좌석 배치도에서 보기</a></p>
+        <p>조회 화면에 표시된 좌석 상태는 확인 시점 기준이에요.</p>
+        <p id="seat-status" role="status">좌석을 불러오는 중…</p>
+        <ul id="seat-list"></ul>
+        <p id="seat-selection" role="status"></p>
+        <p>
+            <a id="booking-link" hidden>선택한 좌석 확인</a>
+            <a href="/reservations">예매 안내</a>
+        </p>
+    </div>
 </div>
 {% endblock %}
 {% block script %}
@@ -51,11 +61,19 @@
                     .filter(Boolean).join(" · ");
                 if (seat.status === "AVAILABLE") {
                     const choice = document.createElement("input");
+                    choice.autocomplete = "off";
                     choice.type = "radio";
                     choice.name = "seat";
                     choice.addEventListener("change", () => {
                         document.querySelector("#seat-selection").textContent =
                             `선택한 좌석: ${seat.seat_seq}. 화면에서만 선택됐어요.`;
+                        const link = document.querySelector("#booking-link");
+                        const params = new URLSearchParams({
+                            perf_id: seat.perf_id,
+                            perf_seat_id: seat.perf_seat_id,
+                        });
+                        link.href = `/reservations?${params}`;
+                        link.hidden = false;
                     });
                     const label = document.createElement("label");
                     label.append(choice, labelText);

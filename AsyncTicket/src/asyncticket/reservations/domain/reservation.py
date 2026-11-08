@@ -76,6 +76,9 @@ class ReservedPerformance:
     reserv_opens_at: datetime  # 예매생성 : 예매 시작일부터
     reserv_closes_at: datetime # 예매생성 : 예매 마감일까지
 
+    def is_reservation_open(self, now: datetime) -> bool:
+        return self.reserv_opens_at <= now < self.reserv_closes_at
+
 @dataclass(frozen=True, kw_only=True)
 class ReservedSeat:
     """예매한 좌석 정보 (performance_seats, seats_info)"""
@@ -138,7 +141,7 @@ class Reservation:
         now: datetime) -> "Reservation": 
 
         # 예매생성 규칙
-        if not (performance.reserv_opens_at <= now < performance.reserv_closes_at):
+        if not performance.is_reservation_open(now):
             raise ReservationConflictError(
                 message="예매 가능한 기간이 아닙니다",
                 error_code="RESERVATION_NOT_OPEN"

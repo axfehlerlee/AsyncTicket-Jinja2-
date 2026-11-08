@@ -2,9 +2,11 @@
 
 # 함수를 "시작 → yield → 종료" 구조의 컨텍스트 매니저로 만들어 주는 데코레이터
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import AsyncIterator
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from asyncticket.performances.presentation.router import router as performance_router
 from asyncticket.reservations.presentation.routers.v1.router import router as reservation_router
@@ -84,6 +86,11 @@ def create_app(
     app.include_router(users_router)
     app.include_router(seat_router)
     app.include_router(web_router)
+    app.mount(
+        "/venue-assets",
+        StaticFiles(directory=Path(__file__).parent / "static" / "venue"),
+        name="venue_assets",
+    )
     return app
 
 

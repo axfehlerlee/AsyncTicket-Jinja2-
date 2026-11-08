@@ -1,16 +1,22 @@
 {% extends "catalog_base.html" %}
 {% block title %}공연 상세{% endblock %}
+{% block head %}{% include "catalog_detail_styles.html" %}{% endblock %}
 {% block content %}
-<h1 id="show-title">공연 상세</h1>
-<p id="show-status" role="status">공연을 불러오는 중…</p>
-<p id="show-description"></p>
-<p id="show-meta"></p>
-<p><a id="show-venue" hidden>공연장 보기</a></p>
+<div class="detail-page">
+    <header class="detail-header">
+        <p class="detail-kicker">01 — PROGRAMME</p>
+        <h1 id="show-title">공연 상세</h1>
+    </header>
+    <p id="show-status" role="status">공연을 불러오는 중…</p>
+    <p id="show-description"></p>
+    <p id="show-meta"></p>
+    <p><a id="show-venue" hidden>공연장 보기</a></p>
 
-<h2>회차</h2>
-<p id="performance-status" role="status"></p>
-<ul id="performance-list"></ul>
-<p><a href="/shows">공연 목록</a></p>
+    <h2>회차</h2>
+    <p id="performance-status" role="status"></p>
+    <ul id="performance-list"></ul>
+    <p><a href="/shows">공연 목록</a></p>
+</div>
 {% endblock %}
 {% block script %}
 <script>

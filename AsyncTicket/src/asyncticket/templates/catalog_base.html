@@ -4,12 +4,19 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}{% endblock %} | AsyncTicket</title>
+    <style>
+        :where(button, input:not([type="radio"]), select, textarea, fieldset, details, dialog) { border-radius: 0; }
+    </style>
+    {% block head %}{% endblock %}
+    {% include "account_assets.html" %}
 </head>
 <body>
-    <nav aria-label="주 메뉴">
-        <a href="/">홈</a> · <a href="/venues">공연장</a> ·
-        <a href="/shows">공연</a> · <a href="/me">내 정보</a>
-    </nav>
+    <header class="catalog-nav">
+        <nav aria-label="주 메뉴">
+            <a href="/">홈</a> · <a href="/venues">공연장</a> · <a href="/shows">공연</a>
+        </nav>
+        {% include "account_nav.html" %}
+    </header>
     <main>
         {% block content %}{% endblock %}
     </main>

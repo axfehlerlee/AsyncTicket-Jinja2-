@@ -1,12 +1,8 @@
-<!doctype html>
-<html lang="ko">
-<head>
-    <meta charset="utf-8">
-    <title>로그인 | AsyncTicket</title>
-</head>
-<body>
-    <h1>로그인</h1>
-
+{% extends "auth_base.html" %}
+{% block title %}로그인{% endblock %}
+{% block heading %}로그인{% endblock %}
+{% block introduction %}가입한 이메일과 비밀번호를 입력해 주세요.{% endblock %}
+{% block content %}
     <form id="login-form" method="post">
         <p>
             <label for="email">이메일</label>
@@ -20,9 +16,10 @@
         </p>
         <button type="submit">로그인</button>
     </form>
-
-    <p id="login-result" role="status"></p>
-    <p><a href="/signup">회원가입</a></p>
+    <p class="auth-result" id="login-result" role="status"></p>
+{% endblock %}
+{% block alternate %}처음이신가요? <a href="/signup">회원가입</a>{% endblock %}
+{% block script %}
     <script>
         const form = document.querySelector("#login-form");
         const button = form.querySelector('button[type="submit"]');
@@ -43,7 +40,7 @@
 
                 if (response.ok && data?.code === "LOGIN_SUCCESS") {
                     sessionStorage.setItem("asyncticket_access_token", data.data.access_token);
-window.location.assign("/me");
+                    window.location.replace("/");
                 } else {
                     result.textContent = data?.message ?? "로그인에 실패했습니다.";
                 }
@@ -54,5 +51,4 @@ window.location.assign("/me");
             }
         });
     </script>
-</body>
-</html>
+{% endblock %}

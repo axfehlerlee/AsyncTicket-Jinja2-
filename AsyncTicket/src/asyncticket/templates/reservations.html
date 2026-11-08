@@ -1,7 +1,106 @@
 {% extends "catalog_base.html" %}
-{% block title %}예매·결제 안내{% endblock %}
+{% block title %}예매 안내{% endblock %}
+{% block head %}{% include "catalog_detail_styles.html" %}{% endblock %}
 {% block content %}
-<h1>예매·결제 안내</h1>
-<p>현재 공연, 회차 및 좌석 상태를 조회할 수 있습니다. 예매와 결제는 서비스 준비 중입니다.</p>
-<p><a href="/shows">공연 목록으로</a></p>
+<div class="detail-page">
+    <header class="detail-header">
+        <p class="detail-kicker">TICKETS</p>
+        <h1>예매 안내</h1>
+    </header>
+    <p>공연 일정과 좌석을 확인할 수 있어요. 온라인 예매와 결제는 준비 중입니다.</p>
+    <p id="selection-status" role="status"></p>
+    <section id="selection" hidden>
+        <h2>선택한 좌석</h2>
+        <p id="selection-event"></p>
+        <p id="selection-seat"></p>
+        <h3>예매 조건 확인</h3>
+        <p id="selection-check-status" role="status"></p>
+        <p id="selection-login" hidden><a href="/login">구매자 계정으로 로그인</a></p>
+        <ul id="selection-check" hidden>
+            <li id="selection-window"></li>
+            <li id="selection-price"></li>
+            <li id="selection-active"></li>
+        </ul>
+        <p><a id="selection-back">회차 화면으로</a></p>
+    </section>
+    <p><a href="/shows">공연 목록 보기</a></p>
+</div>
+{% endblock %}
+{% block script %}
+<script>
+    async function loadReservationCheck(performanceId, seatId) {
+        const status = document.querySelector("#selection-check-status");
+        const login = document.querySelector("#selection-login");
+        status.textContent = "예매 조건을 조회하는 중…";
+        try {
+            const user = await accountSession.current();
+            if (!user) {
+                status.textContent = "로그인하면 예매 기간과 내 진행 중인 예매를 확인할 수 있어요.";
+                login.hidden = false;
+                return;
+            }
+            if (user.role !== "BUYER") {
+                status.textContent = "구매자 계정에서 예매 조건을 확인할 수 있어요.";
+                return;
+            }
+
+            const params = new URLSearchParams({ perf_id: performanceId, perf_seat_id: seatId });
+            const check = await requestApi(`/reservations/check?${params}`, {
+                headers: accountSession.headers(), cache: "no-store",
+            });
+            const period = `${formatDate(check.opens_at)} ~ ${formatDate(check.closes_at)}`;
+            document.querySelector("#selection-window").textContent =
+                `${check.is_open ? "예매 기간 내" : "예매 기간 외"} · ${period} (한국 시간)`;
+            document.querySelector("#selection-price").textContent = check.seat_price == null
+                ? "이 회차에서 선택한 좌석의 가격을 확인할 수 없어요."
+                : `좌석 가격 · ${Number(check.seat_price).toLocaleString("ko-KR")}원`;
+            document.querySelector("#selection-active").textContent = check.has_active_reservation
+                ? "이 회차에 대기 또는 확정된 내 예매가 있어요."
+                : "이 회차에 대기 또는 확정된 내 예매가 없어요.";
+            document.querySelector("#selection-check").hidden = false;
+            status.textContent = "조회 결과입니다. 좌석은 확보되지 않아요.";
+        } catch (error) {
+            login.hidden = error.status !== 401;
+            status.textContent = error.message;
+        }
+    }
+
+    async function loadSelection() {
+        const params = new URLSearchParams(location.search);
+        const performanceId = params.get("perf_id");
+        const seatId = params.get("perf_seat_id");
+        const validId = value => /^[1-9][0-9]{0,18}$/.test(value || "");
+        if (!validId(performanceId) || !validId(seatId)) return;
+
+        const status = document.querySelector("#selection-status");
+        status.textContent = "선택한 좌석을 확인하는 중…";
+
+        try {
+            const url = `/v1/performances/${performanceId}`;
+            const [round, { items }] = await Promise.all([
+                requestApi(url), requestApi(`${url}/seats`, { cache: "no-store" }),
+            ]);
+            const seat = items.find(item => String(item.perf_seat_id) === seatId);
+            if (!seat || seat.status !== "AVAILABLE") {
+                status.textContent = "현재 선택할 수 있는 좌석이 아닙니다.";
+                return;
+            }
+
+            const show = await requestApi(`/v1/shows/${round.show_id}`);
+            const price = seat.price == null ? "가격 미정" : `${seat.price.toLocaleString("ko-KR")}원`;
+            document.querySelector("#selection-event").textContent =
+                `${show.title} · ${round.round_number}회차 · ${formatDate(round.starts_at)}`;
+            document.querySelector("#selection-seat").textContent =
+                [seat.seat_seq, seat.grade, price].filter(Boolean).join(" · ");
+            document.querySelector("#selection-back").href = `/performances/${performanceId}`;
+            document.querySelector("#selection").hidden = false;
+            status.textContent = "";
+            await loadReservationCheck(performanceId, seatId);
+        } catch (error) {
+            status.textContent = error.message;
+        }
+    }
+
+    document.addEventListener("DOMContentLoaded", loadSelection);
+</script>
 {% endblock %}
