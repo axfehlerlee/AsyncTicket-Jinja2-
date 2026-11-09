@@ -4,11 +4,24 @@ from dataclasses import FrozenInstanceError, replace
 from datetime import datetime, timedelta, timezone
 import unittest
 
-from asyncticket.seats.domain.seat_info import SeatInfo, SeatConfigurationConflictError, SeatManagement, SeatInfoNotFoundError
-from asyncticket.shared.core.exceptions import ConflictException, SharedException, ValidationException
+from asyncticket.seats.domain.seat_info import (
+    SeatInfo,
+    SeatConfigurationConflictError,
+    SeatManagement,
+    SeatInfoNotFoundError,
+)
+from asyncticket.shared.core.exceptions import (
+    ConflictException,
+    SharedException,
+    ValidationException,
+)
 from asyncticket.seats.domain.enums import SeatGrade, SeatStatus
 from asyncticket.seats.domain.performance_seat import PerformanceSeat
-from asyncticket.shared.domain.catalog import CatalogActor, CatalogPolicy, CatalogForbiddenError
+from asyncticket.shared.domain.catalog import (
+    CatalogActor,
+    CatalogPolicy,
+    CatalogForbiddenError,
+)
 
 
 class SeatInfoTests(unittest.TestCase):
@@ -44,7 +57,13 @@ class SeatInfoTests(unittest.TestCase):
         for field in ("seat_id", "perf_id"):
             for value in (0, -1, True, "10"):
                 with self.subTest(field=field, value=value):
-                    values = dict(seat_id=101, perf_id=10, name=SeatGrade.R, total_seat=30, price=55000)
+                    values = dict(
+                        seat_id=101,
+                        perf_id=10,
+                        name=SeatGrade.R,
+                        total_seat=30,
+                        price=55000,
+                    )
                     values[field] = value
                     with self.assertRaises(ValidationException):
                         SeatInfo(**values)
@@ -53,7 +72,13 @@ class SeatInfoTests(unittest.TestCase):
         for field in ("total_seat", "price"):
             for value in (-1, True, "100"):
                 with self.subTest(field=field, value=value):
-                    values = dict(seat_id=101, perf_id=10, name=SeatGrade.R, total_seat=30, price=55000)
+                    values = dict(
+                        seat_id=101,
+                        perf_id=10,
+                        name=SeatGrade.R,
+                        total_seat=30,
+                        price=55000,
+                    )
                     values[field] = value
                     with self.assertRaises(ValidationException):
                         SeatInfo(**values)
@@ -63,9 +88,20 @@ class SeatInfoTests(unittest.TestCase):
             SeatInfo(seat_id=101, perf_id=10)
 
     def test_each_required_configuration_field(self):
-        for field, value in (("name", None), ("name", " "), ("total_seat", None), ("price", None)):
+        for field, value in (
+            ("name", None),
+            ("name", " "),
+            ("total_seat", None),
+            ("price", None),
+        ):
             with self.subTest(field=field, value=value):
-                values = dict(seat_id=101, perf_id=10, name=SeatGrade.R, total_seat=30, price=55000)
+                values = dict(
+                    seat_id=101,
+                    perf_id=10,
+                    name=SeatGrade.R,
+                    total_seat=30,
+                    price=55000,
+                )
                 values[field] = value
                 with self.assertRaises(ValidationException):
                     SeatInfo(**values)
@@ -73,14 +109,20 @@ class SeatInfoTests(unittest.TestCase):
     def test_nonnegative_price_and_positive_capacity_boundaries(self):
         for field, value in (("total_seat", 0), ("price", -1)):
             with self.subTest(field=field, value=value):
-                values = dict(seat_id=101, perf_id=10, name=SeatGrade.R, total_seat=30, price=0)
+                values = dict(
+                    seat_id=101, perf_id=10, name=SeatGrade.R, total_seat=30, price=0
+                )
                 values[field] = value
                 with self.assertRaises(ValidationException):
                     SeatInfo(**values)
-        minimum = SeatInfo(seat_id=101, perf_id=10, name=SeatGrade.R, total_seat=1, price=0)
+        minimum = SeatInfo(
+            seat_id=101, perf_id=10, name=SeatGrade.R, total_seat=1, price=0
+        )
         for price in (0, 1, 49999):
             with self.subTest(price=price):
-                grade = SeatInfo(seat_id=101, perf_id=10, name=SeatGrade.R, total_seat=1, price=price)
+                grade = SeatInfo(
+                    seat_id=101, perf_id=10, name=SeatGrade.R, total_seat=1, price=price
+                )
                 self.assertEqual(grade.price, price)
         self.assertEqual(minimum.remaining_seats(0), 1)
         self.assertEqual(minimum.remaining_seats(1), 0)
@@ -91,7 +133,9 @@ class SeatInfoTests(unittest.TestCase):
         for name in (False, 42, "가" * 256):
             with self.subTest(name=name):
                 with self.assertRaises(ValidationException):
-                    SeatInfo(seat_id=101, perf_id=10, name=name, total_seat=30, price=55000)
+                    SeatInfo(
+                        seat_id=101, perf_id=10, name=name, total_seat=30, price=55000
+                    )
 
     def test_price_update_preserves_original_and_configuration(self):
         changed = self.grade.update_price(0)
@@ -115,7 +159,10 @@ class SeatInfoTests(unittest.TestCase):
         self.assertEqual(self.grade.update_price(100, perf_id=10).price, 100)
 
     def test_existing_grade_or_seat_names_reject_configuration(self):
-        for check in (self.grade.require_unique_grade, self.grade.require_unique_seat_names):
+        for check in (
+            self.grade.require_unique_grade,
+            self.grade.require_unique_seat_names,
+        ):
             self.assertIsNone(check(False))
             with self.assertRaises(SeatConfigurationConflictError):
                 check(True)
@@ -126,7 +173,9 @@ class SeatInfoTests(unittest.TestCase):
         grade = SeatInfo.create(perf_id=10, name=SeatGrade.R, total_seat=2, price=0)
         with self.assertRaisesRegex(ValidationException, "중복된 좌석명"):
             grade.require_new_configuration(["A1", "A1"])
-        self.assertEqual(grade.require_new_configuration(["A1", "A2"]).values, ("A1", "A2"))
+        self.assertEqual(
+            grade.require_new_configuration(["A1", "A2"]).values, ("A1", "A2")
+        )
 
     def test_validated_seat_names_are_a_snapshot_and_check_saved_capacity(self):
         grade = SeatInfo.create(perf_id=10, name=SeatGrade.R, total_seat=2, price=0)
@@ -141,22 +190,28 @@ class SeatInfoTests(unittest.TestCase):
             replace(grade, seat_id=101).create_seats(source)
 
     def test_new_individual_seat_has_no_reservation_or_generated_id(self):
-        seat = PerformanceSeat.create(seat_id=101, seat_seq="A1", status=SeatStatus.AVAILABLE)
+        seat = PerformanceSeat.create(
+            seat_id=101, seat_seq="A1", status=SeatStatus.AVAILABLE
+        )
         self.assertIsNone(seat.perf_seat_id)
         self.assertIsNone(seat.reserv_id)
         with self.assertRaisesRegex(ValidationException, "좌석명"):
-            PerformanceSeat.create(seat_id=101, seat_seq=" ", status=SeatStatus.AVAILABLE)
+            PerformanceSeat.create(
+                seat_id=101, seat_seq=" ", status=SeatStatus.AVAILABLE
+            )
 
     def test_management_checks_owner_before_sale_time(self):
         management = SeatManagement(owner_id=7, booking_opens_at=None)
         with self.assertRaises(CatalogForbiddenError):
             management.authorize_change(
-                CatalogActor(user_id=8, role="SELLER"), CatalogPolicy(),
+                CatalogActor(user_id=8, role="SELLER"),
+                CatalogPolicy(),
                 now=datetime.now(timezone.utc),
             )
         with self.assertRaises(SharedException) as caught:
             management.authorize_change(
-                CatalogActor(user_id=7, role="SELLER"), CatalogPolicy(),
+                CatalogActor(user_id=7, role="SELLER"),
+                CatalogPolicy(),
                 now=datetime.now(timezone.utc),
             )
         self.assertEqual(caught.exception.error_code, "INVALID_BOOKING_TIME")
@@ -174,7 +229,9 @@ class SeatInfoTests(unittest.TestCase):
             SeatManagement(owner_id=None, booking_opens_at=None)
         self.assertEqual(caught.exception.error_code, "INVALID_SHOW_OWNER")
         with self.assertRaises(SharedException) as caught:
-            SeatManagement(owner_id=1, booking_opens_at=None).require_before_sale(datetime.now(timezone.utc))
+            SeatManagement(owner_id=1, booking_opens_at=None).require_before_sale(
+                datetime.now(timezone.utc)
+            )
         self.assertEqual(caught.exception.error_code, "INVALID_BOOKING_TIME")
 
     def test_validated_values_cannot_be_changed_directly(self):

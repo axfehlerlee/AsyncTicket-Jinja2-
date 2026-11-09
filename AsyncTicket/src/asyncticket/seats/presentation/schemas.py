@@ -24,7 +24,9 @@ class SeatConfigurationRequest(BaseModel):
     @model_validator(mode="after")
     def validate_names(self):
         try:
-            SeatInfo.validate_request_configuration(self.name, self.total_seat, self.seat_seqs)
+            SeatInfo.validate_request_configuration(
+                self.name, self.total_seat, self.seat_seqs
+            )
         except ValidationException as error:
             # HTTP 입력은 기존 Pydantic 검증 응답으로 전달한다.
             raise ValueError(error.message) from error

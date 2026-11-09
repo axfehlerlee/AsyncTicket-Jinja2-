@@ -150,7 +150,6 @@ class SqlAlchemySeatInfoRepository(SeatInfoRepository):
         await self.session.rollback()
 
 
-
 class SqlAlchemyPerformanceSeatRepository(PerformanceSeatRepository):
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -302,12 +301,16 @@ class SqlAlchemyPerformanceSeatRepository(PerformanceSeatRepository):
 
     # 8) 회차·좌석 PK SELECT → 한 건 또는 None
     async def get_performance_seat_by_id(
-        self, perf_id: int, perf_seat_id: int,
+        self,
+        perf_id: int,
+        perf_seat_id: int,
     ) -> dict[str, object] | None:
-        result = await self.session.execute(self._seats().where(
-            SeatsInfoModel.perf_id == perf_id,
-            PerformanceSeats.perf_seat_id == perf_seat_id,
-        ))
+        result = await self.session.execute(
+            self._seats().where(
+                SeatsInfoModel.perf_id == perf_id,
+                PerformanceSeats.perf_seat_id == perf_seat_id,
+            )
+        )
         row = result.mappings().one_or_none()
         return dict(row) if row else None
 
@@ -329,12 +332,16 @@ class SqlAlchemyPerformanceSeatRepository(PerformanceSeatRepository):
                 PerformanceSeats.reserv_id == reserv_id,
                 PerformanceSeats.status == expected_status,
                 PerformanceSeats.seat_id2.in_(
-                    select(SeatsInfoModel.seat_id).where(SeatsInfoModel.perf_id == perf_id)
+                    select(SeatsInfoModel.seat_id).where(
+                        SeatsInfoModel.perf_id == perf_id
+                    )
                 ),
-                select(reservations.c.reserv_id).where(
+                select(reservations.c.reserv_id)
+                .where(
                     reservations.c.reserv_id == reserv_id,
                     reservations.c.perf_id == perf_id,
-                ).exists(),
+                )
+                .exists(),
             )
             .values(reserv_id=None, status=released_status)
             .returning(PerformanceSeats.perf_seat_id)

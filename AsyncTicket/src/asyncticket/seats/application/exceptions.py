@@ -6,9 +6,10 @@
 
 from asyncticket.shared.core.exceptions import NotFoundException, SharedException
 
-
 # 기존 호출자의 import 경로를 유지한다. 정의는 도메인에 둔다.
-from asyncticket.seats.domain.seat_info import SeatInfoNotFoundError as SeatInfoNotFoundError
+from asyncticket.seats.domain.seat_info import (
+    SeatInfoNotFoundError as SeatInfoNotFoundError,
+)
 
 
 class PerformanceNotFoundError(NotFoundException):
@@ -28,9 +29,13 @@ class ReservationSeatsNotFoundError(NotFoundException):
 
 class SeatLookupIntegrityError(SharedException):
     def __init__(self, message: str):
-        super().__init__(message, status_code=500, error_code="SEAT_LOOKUP_INTEGRITY_ERROR")
+        super().__init__(
+            message, status_code=500, error_code="SEAT_LOOKUP_INTEGRITY_ERROR"
+        )
 
 
 class ReservationSeatIntegrityError(SharedException):
     def __init__(self, message: str):
-        super().__init__(message, status_code=500, error_code="RESERVATION_SEAT_INTEGRITY_ERROR")
+        super().__init__(
+            message, status_code=500, error_code="RESERVATION_SEAT_INTEGRITY_ERROR"
+        )

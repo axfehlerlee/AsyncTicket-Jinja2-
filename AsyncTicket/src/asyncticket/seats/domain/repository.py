@@ -19,7 +19,9 @@ class SeatInfoRepository(ABC):
 
     # 2) 회차·등급 ID로 조회용 데이터 반환
     @abstractmethod
-    async def get_seat_info_view(self, perf_id: int, seat_id: int) -> dict[str, object] | None:
+    async def get_seat_info_view(
+        self, perf_id: int, seat_id: int
+    ) -> dict[str, object] | None:
         pass
 
     # 3) 등급 저장
@@ -77,13 +79,17 @@ class PerformanceSeatRepository(ABC):
 
     # 4) 회차·좌석명으로 상세 조회
     @abstractmethod
-    async def get_performance_seat(self, perf_id: int, seat_seq: str) -> dict[str, object] | None:
+    async def get_performance_seat(
+        self, perf_id: int, seat_seq: str
+    ) -> dict[str, object] | None:
         pass
 
     # 5) 회원이 소유한 예매의 좌석 조회
     @abstractmethod
     async def get_owned_reservation_seats(
-        self, reserv_id: int, user_id: int,
+        self,
+        reserv_id: int,
+        user_id: int,
     ) -> dict[str, object] | None:
         pass
 
@@ -104,7 +110,9 @@ class PerformanceSeatRepository(ABC):
     # 7) 회차·개별 좌석 ID로 예매용 조회
     @abstractmethod
     async def get_performance_seat_by_id(
-        self, perf_id: int, perf_seat_id: int,
+        self,
+        perf_id: int,
+        perf_seat_id: int,
     ) -> dict[str, object] | None:
         """예매 연결에 쓰는 개별 좌석 ID로 회차·가격·현재 상태를 조회한다."""
         pass

@@ -6,6 +6,7 @@ from asyncticket.seats.domain.enums import SeatStatus, SeatReservationAction
 from dataclasses import dataclass
 from asyncticket.shared.core.exceptions import ConflictException, ValidationException
 
+
 @dataclass(frozen=True, kw_only=True)
 class PerformanceSeat:
     """좌석 등급에 속한 개별 좌석. 예매 연결 전 reserv_id는 None이다."""
@@ -38,7 +39,11 @@ class PerformanceSeat:
 
     @classmethod
     def create(
-        cls, *, seat_id: int, seat_seq: str, status: SeatStatus,
+        cls,
+        *,
+        seat_id: int,
+        seat_seq: str,
+        status: SeatStatus,
     ) -> "PerformanceSeat":
         """등급에 속한 신규 좌석을 만든다. 상태는 생성 호출부가 전달한다."""
         return cls(seat_id=seat_id, seat_seq=seat_seq, status=status)
@@ -59,20 +64,25 @@ class SeatReservationConflictError(ConflictException):
 @dataclass(frozen=True, kw_only=True)
 class SeatIdentity:
     """예매용 단건 조회에 사용하는 회차·좌석 식별 값."""
+
     perf_id: int
     perf_seat_id: int
 
     def __post_init__(self) -> None:
-        if any(type(value) is not int or not 0 < value <= 9223372036854775807
-               for value in (self.perf_id, self.perf_seat_id)):
+        if any(
+            type(value) is not int or not 0 < value <= 9223372036854775807
+            for value in (self.perf_id, self.perf_seat_id)
+        ):
             raise ValidationException(
-                "회차·좌석 번호는 유효한 양수여야 합니다.", error_code="INVALID_SEAT_RESERVATION_ID",
+                "회차·좌석 번호는 유효한 양수여야 합니다.",
+                error_code="INVALID_SEAT_RESERVATION_ID",
             )
 
 
 @dataclass(frozen=True, kw_only=True)
 class SeatReservationChange:
     """예매에서 전달한 좌석 연결·해제 요청. 실제 상태 경합은 저장소 UPDATE가 검사한다."""
+
     perf_id: int
     perf_seat_id: int
     reserv_id: int
@@ -81,30 +91,67 @@ class SeatReservationChange:
     action: SeatReservationAction
 
     def __post_init__(self) -> None:
-        if min(self.perf_id, self.perf_seat_id, self.reserv_id) <= 0:
+        if any(
+            type(value) is not int or not 0 < value <= 9223372036854775807
+            for value in (self.perf_id, self.perf_seat_id, self.reserv_id)
+        ):
             raise ValidationException(
-                "회차·좌석·예매 번호는 양수여야 합니다.", error_code="INVALID_SEAT_RESERVATION_ID",
+                "회차·좌석·예매 번호는 양수여야 합니다.",
+                error_code="INVALID_SEAT_RESERVATION_ID",
             )
-        if not self.expected_status or not self.target_status or self.expected_status == self.target_status:
+        if (
+            not self.expected_status
+            or not self.target_status
+            or self.expected_status == self.target_status
+        ):
             raise ValidationException(
                 f"{self.action} 전후의 서로 다른 좌석 상태가 필요합니다.",
                 error_code="INVALID_SEAT_STATUS_TRANSITION",
             )
 
     @classmethod
-    def assign(cls, *, perf_id: int, perf_seat_id: int, reserv_id: int,
-               expected_status: str, reserved_status: str) -> "SeatReservationChange":
-        return cls(perf_id=perf_id, perf_seat_id=perf_seat_id, reserv_id=reserv_id,
-                   expected_status=expected_status, target_status=reserved_status, action=SeatReservationAction.ASSIGN)
+    def assign(
+        cls,
+        *,
+        perf_id: int,
+        perf_seat_id: int,
+        reserv_id: int,
+        expected_status: str,
+        reserved_status: str,
+    ) -> "SeatReservationChange":
+        return cls(
+            perf_id=perf_id,
+            perf_seat_id=perf_seat_id,
+            reserv_id=reserv_id,
+            expected_status=expected_status,
+            target_status=reserved_status,
+            action=SeatReservationAction.ASSIGN,
+        )
 
     @classmethod
-    def release(cls, *, perf_id: int, perf_seat_id: int, reserv_id: int,
-                expected_status: str, released_status: str) -> "SeatReservationChange":
-        return cls(perf_id=perf_id, perf_seat_id=perf_seat_id, reserv_id=reserv_id,
-                   expected_status=expected_status, target_status=released_status, action=SeatReservationAction.RELEASE)
+    def release(
+        cls,
+        *,
+        perf_id: int,
+        perf_seat_id: int,
+        reserv_id: int,
+        expected_status: str,
+        released_status: str,
+    ) -> "SeatReservationChange":
+        return cls(
+            perf_id=perf_id,
+            perf_seat_id=perf_seat_id,
+            reserv_id=reserv_id,
+            expected_status=expected_status,
+            target_status=released_status,
+            action=SeatReservationAction.RELEASE,
+        )
 
     def require_applied(self, applied: bool) -> None:
         if not applied:
-            message = ("좌석을 예매에 연결할 수 없습니다." if self.action == SeatReservationAction.ASSIGN
-                       else "좌석의 예매 연결을 해제할 수 없습니다.")
+            message = (
+                "좌석을 예매에 연결할 수 없습니다."
+                if self.action == SeatReservationAction.ASSIGN
+                else "좌석의 예매 연결을 해제할 수 없습니다."
+            )
             raise SeatReservationConflictError(message)

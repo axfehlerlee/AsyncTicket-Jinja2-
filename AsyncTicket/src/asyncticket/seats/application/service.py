@@ -8,7 +8,9 @@ from asyncticket.seats.domain.repository import (
 from asyncticket.seats.domain.seat_info import SeatInfo, SeatManagement
 from asyncticket.seats.domain.enums import SeatGrade
 from asyncticket.seats.domain.performance_seat import (
-    SeatIdentity, SeatReservationChange, SeatReservationConflictError,
+    SeatIdentity,
+    SeatReservationChange,
+    SeatReservationConflictError,
 )
 from asyncticket.seats.application.exceptions import (
     SeatInfoNotFoundError,
@@ -52,7 +54,8 @@ class SeatInfoService:
         if context is None:
             raise PerformanceNotFoundError("공연 회차를 찾을 수 없습니다.")
         management = SeatManagement(
-            owner_id=context["owner_id"], booking_opens_at=context["booking_opens_at"],
+            owner_id=context["owner_id"],
+            booking_opens_at=context["booking_opens_at"],
         )
         management.authorize_change(actor, self.policy, now=datetime.now(timezone.utc))
 
@@ -69,7 +72,10 @@ class SeatInfoService:
         """입력값으로 등급을 만들고 개별 좌석과 함께 저장한다."""
         try:
             seat_info = SeatInfo.create(
-                perf_id=perf_id, name=name, total_seat=total_seat, price=price,
+                perf_id=perf_id,
+                name=name,
+                total_seat=total_seat,
+                price=price,
             )
             await self._authorize(perf_id, actor)
             names = seat_info.require_new_configuration(seat_seqs)
@@ -78,7 +84,9 @@ class SeatInfoService:
                 await self.repository.grade_exists(seat_info.perf_id, seat_info.name)
             )
             seat_info.require_unique_seat_names(
-                await self.performance_seat_repository.names_exist(seat_info.perf_id, list(names.values))
+                await self.performance_seat_repository.names_exist(
+                    seat_info.perf_id, list(names.values)
+                )
             )
 
             saved_grade = await self.repository.save_seat_info(seat_info)
@@ -156,40 +164,63 @@ class PerformanceSeatService:
                 reserv_id, user_id
             )
         except SeatLookupConflictError as exc:
-            raise ReservationSeatIntegrityError("예매 좌석 정보를 확인할 수 없습니다.") from exc
+            raise ReservationSeatIntegrityError(
+                "예매 좌석 정보를 확인할 수 없습니다."
+            ) from exc
         if reservation is None:
             raise ReservationSeatsNotFoundError("예매 좌석을 찾을 수 없습니다.")
         return reservation
 
     async def assign_reservation(
-        self, *, perf_id: int, perf_seat_id: int, reserv_id: int,
-        expected_status: str, reserved_status: str,
+        self,
+        *,
+        perf_id: int,
+        perf_seat_id: int,
+        reserv_id: int,
+        expected_status: str,
+        reserved_status: str,
     ) -> None:
         """예매와 같은 세션으로 연결한다. 상태값과 최종 commit은 호출부가 맡는다."""
         change = SeatReservationChange.assign(
-            perf_id=perf_id, perf_seat_id=perf_seat_id, reserv_id=reserv_id,
-            expected_status=expected_status, reserved_status=reserved_status,
+            perf_id=perf_id,
+            perf_seat_id=perf_seat_id,
+            reserv_id=reserv_id,
+            expected_status=expected_status,
+            reserved_status=reserved_status,
         )
         linked = await self.repository.assign_reservation(
-            perf_id=change.perf_id, perf_seat_id=change.perf_seat_id, reserv_id=change.reserv_id,
-            expected_status=change.expected_status, reserved_status=change.target_status,
+            perf_id=change.perf_id,
+            perf_seat_id=change.perf_seat_id,
+            reserv_id=change.reserv_id,
+            expected_status=change.expected_status,
+            reserved_status=change.target_status,
         )
         change.require_applied(linked)
 
     async def get_performance_seat_by_id(
-        self, *, perf_id: int, perf_seat_id: int,
+        self,
+        *,
+        perf_id: int,
+        perf_seat_id: int,
     ) -> dict[str, object]:
         """가격·상태 조회. 조회 성공은 좌석 선점을 뜻하지 않는다."""
         identity = SeatIdentity(perf_id=perf_id, perf_seat_id=perf_seat_id)
         await self._require_performance(identity.perf_id)
-        seat = await self.repository.get_performance_seat_by_id(identity.perf_id, identity.perf_seat_id)
+        seat = await self.repository.get_performance_seat_by_id(
+            identity.perf_id, identity.perf_seat_id
+        )
         if seat is None:
             raise SeatNotFoundError("해당 회차의 좌석을 찾을 수 없습니다.")
         return seat
 
     async def release_reservation(
-        self, *, perf_id: int, perf_seat_id: int, reserv_id: int,
-        expected_status: str, released_status: str,
+        self,
+        *,
+        perf_id: int,
+        perf_seat_id: int,
+        reserv_id: int,
+        expected_status: str,
+        released_status: str,
     ) -> None:
         """현재 예매 연결만 해제한다. 다른 예매로 바뀐 좌석은 해제하지 않는다.
 
@@ -197,11 +228,17 @@ class PerformanceSeatService:
         """
         # 미리 조회한 ORM 객체가 있으면 호출부에서 refresh한 뒤 사용한다.
         change = SeatReservationChange.release(
-            perf_id=perf_id, perf_seat_id=perf_seat_id, reserv_id=reserv_id,
-            expected_status=expected_status, released_status=released_status,
+            perf_id=perf_id,
+            perf_seat_id=perf_seat_id,
+            reserv_id=reserv_id,
+            expected_status=expected_status,
+            released_status=released_status,
         )
         released = await self.repository.release_reservation(
-            perf_id=change.perf_id, perf_seat_id=change.perf_seat_id, reserv_id=change.reserv_id,
-            expected_status=change.expected_status, released_status=change.target_status,
+            perf_id=change.perf_id,
+            perf_seat_id=change.perf_seat_id,
+            reserv_id=change.reserv_id,
+            expected_status=change.expected_status,
+            released_status=change.target_status,
         )
         change.require_applied(released)

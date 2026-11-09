@@ -3,7 +3,12 @@
 
 from dataclasses import dataclass, replace
 from datetime import datetime
-from asyncticket.shared.core.exceptions import ConflictException, SharedException, NotFoundException, ValidationException
+from asyncticket.shared.core.exceptions import (
+    ConflictException,
+    SharedException,
+    NotFoundException,
+    ValidationException,
+)
 from asyncticket.seats.domain.enums import SeatGrade, SeatStatus
 from asyncticket.seats.domain.performance_seat import PerformanceSeat
 from asyncticket.shared.domain.catalog import CatalogActor, CatalogPolicy
@@ -103,7 +108,9 @@ class SeatInfo:
 
     @staticmethod
     def validate_request_configuration(
-        name: SeatGrade, total_seat: int, seat_seqs: list[str],
+        name: SeatGrade,
+        total_seat: int,
+        seat_seqs: list[str],
     ) -> None:
         # 요청에서는 기존과 같이 공백 → 수량 → 중복 순서로 검사한다.
         if not name.strip() or any(not seat_seq.strip() for seat_seq in seat_seqs):
@@ -114,8 +121,11 @@ class SeatInfo:
     def create_seats(self, seat_seqs: list[str] | SeatNames) -> list[PerformanceSeat]:
         if self.seat_id is None:
             raise ValidationException("등급을 먼저 저장해야 합니다.")
-        names = (seat_seqs if isinstance(seat_seqs, SeatNames)
-                 else SeatNames(total_seat=self.total_seat, values=tuple(seat_seqs)))
+        names = (
+            seat_seqs
+            if isinstance(seat_seqs, SeatNames)
+            else SeatNames(total_seat=self.total_seat, values=tuple(seat_seqs))
+        )
         if names.total_seat != self.total_seat:
             raise ValidationException("좌석명 개수와 등급 좌석 수가 일치해야 합니다.")
 
@@ -132,9 +142,7 @@ class SeatInfo:
     # 7) 저장된 등급만 수정 가능
     def require_saved_for_update(self) -> None:
         if self.seat_id is None:
-            raise ValidationException(
-                "신규 등급은 좌석명과 함께 생성해야 합니다."
-            )
+            raise ValidationException("신규 등급은 좌석명과 함께 생성해야 합니다.")
 
     # 가격 변경도 생성 시의 가격 검증을 재사용한다.
     def update_price(self, price: int, *, perf_id: int | None = None) -> "SeatInfo":
@@ -153,17 +161,22 @@ class SeatInfo:
     # 11) 저장소가 조회한 기존 등급 중복 여부로 판단
     def require_unique_grade(self, already_exists: bool) -> None:
         if already_exists:
-            raise SeatConfigurationConflictError("같은 회차에 이미 등록된 좌석 등급입니다.")
+            raise SeatConfigurationConflictError(
+                "같은 회차에 이미 등록된 좌석 등급입니다."
+            )
 
     # 12) 저장소가 조회한 기존 좌석명 중복 여부로 판단
     def require_unique_seat_names(self, already_exists: bool) -> None:
         if already_exists:
-            raise SeatConfigurationConflictError("같은 회차에 이미 등록된 좌석명입니다.")
+            raise SeatConfigurationConflictError(
+                "같은 회차에 이미 등록된 좌석명입니다."
+            )
 
 
 @dataclass(frozen=True, kw_only=True)
 class SeatManagement:
     """외부에서 조회한 소유자·판매 시각을 좌석 관리 규칙으로 판단한다."""
+
     owner_id: int
     booking_opens_at: datetime
 
@@ -171,23 +184,33 @@ class SeatManagement:
         if type(self.owner_id) is not int or self.owner_id <= 0:
             raise SharedException(
                 "공연 소유자 설정을 확인해야 합니다.",
-                status_code=503, error_code="INVALID_SHOW_OWNER",
+                status_code=503,
+                error_code="INVALID_SHOW_OWNER",
             )
 
     def authorize_change(
-        self, actor: CatalogActor, policy: CatalogPolicy, *, now: datetime,
+        self,
+        actor: CatalogActor,
+        policy: CatalogPolicy,
+        *,
+        now: datetime,
     ) -> None:
         """기존 정책의 소유권을 확인한 뒤 판매 시작 전 변경만 허용한다."""
         policy.authorize(actor, self.owner_id)
         self.require_before_sale(now)
 
     def require_before_sale(self, now: datetime) -> None:
-        if not isinstance(self.booking_opens_at, datetime) or self.booking_opens_at.utcoffset() is None:
+        if (
+            not isinstance(self.booking_opens_at, datetime)
+            or self.booking_opens_at.utcoffset() is None
+        ):
             raise SharedException(
                 "회차 판매 시각 설정을 확인해야 합니다.",
-                status_code=503, error_code="INVALID_BOOKING_TIME",
+                status_code=503,
+                error_code="INVALID_BOOKING_TIME",
             )
         if now >= self.booking_opens_at:
             raise ConflictException(
-                "판매 시작 후 좌석 구성을 변경할 수 없습니다.", error_code="SEAT_SALE_STARTED",
+                "판매 시작 후 좌석 구성을 변경할 수 없습니다.",
+                error_code="SEAT_SALE_STARTED",
             )
