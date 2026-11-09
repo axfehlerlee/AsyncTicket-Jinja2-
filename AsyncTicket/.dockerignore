@@ -7,3 +7,8 @@ __pycache__
 *.pyc
 tests
 docs
+**/*.pem
+**/.env
+**/.env.*
+**/__pycache__
+**/*.pyc
