@@ -63,7 +63,7 @@ class ReservationTests(unittest.TestCase):
         self.seat = ReservedSeat(reserved_seat_id=100, reserved_seat_price=Decimal("150000"))
         self.payment = ReservedPayment(reserved_pay_id=1000)
 
-    def make_reservation(self, now=NOW, seat_price=Decimal("150000")):
+    def make_reservation(self, now=NOW, seat_price=Decimal("150000"), has_active_reservation=False):
         """
         테스트용 예매대기(PENDING) 예매를 만드는 도우미
         - 아무것도 안 넘기면 : 11/5에 15만원 좌석을 예매
@@ -73,7 +73,7 @@ class ReservationTests(unittest.TestCase):
             ticketholder=self.ticketholder,
             performance=self.performance,
             seat=ReservedSeat(reserved_seat_id=100, reserved_seat_price=seat_price),
-            order_number="ORD-001",
+            has_active_reservation=has_active_reservation,
             now=now,
         )
 
@@ -86,6 +86,19 @@ class ReservationTests(unittest.TestCase):
     # =========================================================
     # 1. 예매 생성
     # =========================================================
+    def test_주문번호는_ORD로_시작하고_예매마다_다르다(self):
+        first = self.make_reservation()
+        second = self.make_reservation()
+
+        self.assertTrue(first.order_number.startswith("ORD-"))
+        self.assertNotEqual(first.order_number, second.order_number)
+
+    def test_이미_진행중인_예매가_있으면_예매할_수_없다(self):
+        with self.assertRaises(ReservationConflictError) as error : 
+            self.make_reservation(has_active_reservation=True)
+
+        self.assertEqual(error.exception.error_code, "RESERVATION_ALREADY_EXISTS")
+
     def test_새_예매는_대기상태이고_금액은_좌석가격이다(self):
         # 실행
         reservation = self.make_reservation()
@@ -151,10 +164,22 @@ class ReservationTests(unittest.TestCase):
     # =========================================================
     def test_본인_예매인지_확인한다(self):
         reservation = self.make_reservation()
-
+        
         self.assertTrue(reservation.is_owned(OWNER_ID))     # 본인 -> True
         self.assertFalse(reservation.is_owned(OTHER_ID))    # 타인 -> False
 
+    def test_본인은_예매를_조회할_수_있다(self) :
+        reservation = self.make_reservation()
+
+        reservation.check_viewable(OWNER_ID)  # 예외가 나지 않으면 통과
+
+    def test_다른_회원은_예매를_조회할_수_없다(self):
+        reservation = self.make_reservation()
+
+        with self.assertRaises(ReservationForbiddenError) as error :
+            reservation.check_viewable(OTHER_ID)
+
+        self.assertEqual(error.exception.error_code, "RESERVATION_FORBIDDEN")
 
     # =========================================================
     # 3. 예매 확정 (결제 성공 후)

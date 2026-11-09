@@ -129,7 +129,7 @@ class ReservationRepositoryTests(unittest.IsolatedAsyncioTestCase):
                 reserv_closes_at=datetime(2026, 11, 30, tzinfo=UTC),
             ),
             seat=ReservedSeat(reserved_seat_id=100, reserved_seat_price=Decimal("150000")),
-            order_number="ORD-NEW",
+            has_active_reservation=False,
             now=datetime(2026, 11, 5, tzinfo=UTC),
         )
         self.assertIsNone(reservation.reserv_id)
