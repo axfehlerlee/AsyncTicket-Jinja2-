@@ -8,9 +8,12 @@ class SeatStatus(StrEnum):
     AVAILABLE = "AVAILABLE"
     RESERVED = "RESERVED"
     OCCUPIED = "OCCUPIED"
-    def is_reserved(self) -> bool:
-        return self == SeatStatus.RESERVED
 
 class SeatGrade(StrEnum):
     R = "R석"
     S = "S석"
+
+class SeatReservationAction(StrEnum):
+    """연결·해제 요청의 종류. 좌석 상태값과는 구분한다."""
+    ASSIGN = "연결"
+    RELEASE = "해제"

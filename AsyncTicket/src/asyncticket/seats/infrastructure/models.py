@@ -4,7 +4,7 @@
 from sqlalchemy import BigInteger, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 from asyncticket.seats.domain.enums import SeatGrade, SeatStatus
-from asyncticket.seats.domain.performanc_seat import PerformanceSeat
+from asyncticket.seats.domain.performance_seat import PerformanceSeat
 from asyncticket.seats.domain.seat_info import SeatInfo
 from asyncticket.shared.core.models import Base
 
@@ -29,6 +29,7 @@ class SeatsInfoModel(Base):
 
     # 1) DB 행 → 좌석 등급 도메인 변환
     def to_seat_info(self) -> SeatInfo:
+        # nullable DB 행의 복원 방어다. 정상 값의 업무 규칙은 SeatInfo가 검사한다.
         if self.name is None:
             raise ValueError("좌석 등급명은 공백이 아닌 1~255자여야 합니다.")
         if self.total_seat is None:
@@ -67,6 +68,7 @@ class PerformanceSeats(Base):
 
     # 1) DB 행 → 개별 좌석 도메인 변환
     def to_performance_seat(self) -> PerformanceSeat:
+        # 미설정 DB 값과 사용자 입력 오류를 구분하고, 나머지는 도메인에 위임한다.
         if self.seat_seq is None:
             raise ValueError("좌석명은 공백이 아닌 1~255자여야 합니다.")
         return PerformanceSeat(

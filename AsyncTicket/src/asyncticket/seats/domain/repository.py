@@ -3,7 +3,7 @@
 
 from abc import ABC, abstractmethod
 
-from asyncticket.seats.domain.performanc_seat import PerformanceSeat
+from asyncticket.seats.domain.performance_seat import PerformanceSeat
 from asyncticket.seats.domain.seat_info import SeatInfo
 
 
@@ -62,6 +62,7 @@ class PerformanceSeatRepository(ABC):
     # 1) 개별 좌석 여러 건 저장
     @abstractmethod
     async def save_many(self, seats: list[PerformanceSeat]) -> None:
+        """ID가 발급되지 않은 신규 좌석만 저장한다. 기존 좌석 수정은 지원하지 않는다."""
         pass
 
     # 2) 같은 회차의 기존 좌석명 중복 검사

@@ -6,7 +6,6 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Path, Response
 
 from asyncticket.seats.application.service import PerformanceSeatService, SeatInfoService
-from asyncticket.seats.domain.seat_info import SeatInfo
 from asyncticket.wiring.seats import provide_seat_info_service
 from asyncticket.wiring.performance_seats import provide_performance_seat_service
 from asyncticket.seats.presentation.schemas import (
@@ -58,9 +57,10 @@ async def create_configuration(
     perf_id: PositiveId, body: SeatConfigurationRequest, response: Response,
     service: InfoService, actor: CurrentActor,
 ):
-    saved = await service.create(SeatInfo.create(
+    saved = await service.create(
         perf_id=perf_id, name=body.name, total_seat=body.total_seat, price=body.price,
-    ), body.seat_seqs, actor)
+        seat_seqs=body.seat_seqs, actor=actor,
+    )
     response.headers["Location"] = f"/v1/performances/{perf_id}/seat-infos/{saved.seat_id}"
     return APIResponse[SeatInfoResponse].ok(data=SeatInfoResponse.model_validate(saved))
 

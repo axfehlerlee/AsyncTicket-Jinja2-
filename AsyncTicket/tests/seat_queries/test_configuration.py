@@ -344,7 +344,7 @@ class SeatConfigurationTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIsNone(response.json()["data"])
                 self.assertEqual(reached_failure_point, [failure_point])
                 failed.assert_awaited_once()
-                rolled_back.assert_awaited()
+                rolled_back.assert_awaited_once()
                 # 세션이 닫히기 전에 서비스가 직접 rollback했는지 확인한다.
                 self.assertFalse(session.in_transaction())
                 self.assertEqual(await self._configuration_snapshot(), before)
