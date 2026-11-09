@@ -1,5 +1,13 @@
 # 💺 AsyncTicket 좌석 Jinja2 개인 프리뷰
 
+## 최신 반영 기준 (2026-11-09)
+
+- 팀 dev: PR #58 머지 커밋 `59e9aab`
+- 좌석: [PR #59](https://github.com/yeji-jang/fastAPI-Backend-team-project/pull/59), `98d43b4`
+- 개인 Jinja2 화면과 정적 파일을 유지하며 팀 백엔드 변경을 통합했습니다.
+- 아래 내용에는 초기 프리뷰 작성 당시의 계획·검증 기록이 포함됩니다.
+
+
 기존 좌석 API를 화면에 연결하며 Jinja2와 백엔드의 동작을 공부하는 개인 프로젝트입니다.
 
 ## 🎯 목표

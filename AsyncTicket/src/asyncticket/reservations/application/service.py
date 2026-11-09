@@ -22,7 +22,6 @@
         1) 예매 조회
         2) 본인 예매만 조회
 """
-import uuid
 from datetime import datetime, timezone
 
 # <Domain - 예매>
@@ -95,11 +94,8 @@ class ReservationService:
         now = now or datetime.now(timezone.utc)
 
 
-        # 1) 1인 1건 확인 (대기, 확정 예매가 있으면 예매불가)
-        if not await self.checker.is_reserv_possible(ticketholder_id, perf_id) :
-            raise ConflictException(
-                message="이미 예매한 회차 입니다",
-                error_code="RESERVATION_ALREADY_EXISTS")
+        # 1) 1인 1건 확인 (있는지만 조회, 판단은 엔티티가)
+        has_active = not await self.checker.is_reserv_possible(ticketholder_id, perf_id)
 
         # 2) 회차 및 좌석 조회
         # 회차
@@ -127,7 +123,7 @@ class ReservationService:
                 ),
                 performance=performance,
                 seat=seat,
-                order_number=f"ORD-{uuid.uuid4().hex}", 
+                has_active_reservation=has_active, 
                 now=now,
             )
         except ReservationError as err : 
@@ -224,11 +220,12 @@ class ReservationService:
         # 1) 예매 조회 (없으면 404)
         reservation = await self._get_reservation(reserv_id)
 
-        # 2) 본인 예매만 조회
-        if not reservation.is_owned(ticketholder_id) : 
-            raise ForbiddenException(
-                message="본인의 예매만 조회할 수 있습니다",
-                error_code="RESERVATION_FORBIDDEN")
+        # 2) 본인 예매만 조회 (본인 확인은 엔티티가 판단)
+        try :
+            reservation.check_viewable(ticketholder_id)
+        except ReservationError as err :
+            raise self._to_shared_exception(err) from err
+
         return reservation
 
     # 5-2. 예매 조회 : 내 예매 목록 (최신순, 없으면 빈 리스트)

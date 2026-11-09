@@ -16,6 +16,7 @@ from asyncticket.shared.core.database import close_db, engine
 from asyncticket.shared.core.exception_handlers import register_exception_handlers
 # 공용 로거 생성 함수
 from asyncticket.shared.core.logger import get_logger
+from asyncticket.shared.core.middlewares import register_middlewares
 # Base : 모든 모델의 부모, 등록된 테이블 정보(metadata)를 가짐
 # init_models : 모든 도메인 models.py를 import해서 Base에 테이블 등록
 from asyncticket.shared.core.models import Base, init_models
@@ -33,6 +34,7 @@ from asyncticket.auth.presentation.routers.v1.router import (
 from asyncticket.users.presentation.router.v1.router import (
     router as users_router,
 )
+
 # 이 파일에서 사용할 로거 (로그에 "app.main"이라는 이름으로 표시됨)
 logger = get_logger("app.main")
 
@@ -78,6 +80,7 @@ def create_app(
     app.include_router(show_router)
     app.include_router(performance_router)
 
+
     app.include_router(venue_router)
     app.include_router(reservation_router)
 
@@ -91,6 +94,7 @@ def create_app(
         StaticFiles(directory=Path(__file__).parent / "static" / "venue"),
         name="venue_assets",
     )
+    register_middlewares(app)
     return app
 
 

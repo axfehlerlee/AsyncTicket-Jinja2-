@@ -13,6 +13,8 @@
         - 예매 기간 안에만 예매 (예매 시작일시 <= 현재(now) < 예매 마감 일시)
         - 판매 가능한 좌석만 예매할 수 있다 (좌석 도메인 assign_reservation에서 보장)
         - 생성되면 예매대기(PENDING), DB 저장 시 reserv_id가 생긴다
+        - 한 회원은 한 회차에 예매대기·예매확정 예매를 1건만 가질 수 있다 (취소하면 다시 가능)
+        - 주문번호는 생성할 때 "ORD-"로 시작하는 고유 번호로 만든다 (토스 orderId로 사용)
     3) 예매 확정 (결제 성공 후)
         - 예매대기(PENDING) 상태에서만 확정 가능
         - 확정되면 예매확정(CONFIRMED)이 되고 결제 정보와 확정 일시를 기록한다
@@ -26,7 +28,7 @@
         - 공연 시작 전까지만 취소
         - 취소처리되면 예매상태는 취소(CANCELED)가 되고 취소 일시를 기록한다
 """
-
+import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal # total_amount
@@ -75,9 +77,6 @@ class ReservedPerformance:
     perf_starts_at: datetime   # 예매취소 : 공연 시작일 전까지
     reserv_opens_at: datetime  # 예매생성 : 예매 시작일부터
     reserv_closes_at: datetime # 예매생성 : 예매 마감일까지
-
-    def is_reservation_open(self, now: datetime) -> bool:
-        return self.reserv_opens_at <= now < self.reserv_closes_at
 
 @dataclass(frozen=True, kw_only=True)
 class ReservedSeat:
@@ -137,11 +136,19 @@ class Reservation:
         ticketholder:TicketHolder, 
         performance:ReservedPerformance, 
         seat:ReservedSeat,
-        order_number: str,
+        has_active_reservation: bool,   # 이 회차에 진행 중(대기·확정) 예매가 있는지
         now: datetime) -> "Reservation": 
 
         # 예매생성 규칙
-        if not performance.is_reservation_open(now):
+        # 1) 한 회원은 한 회차에 1건만
+        if has_active_reservation :
+            raise ReservationConflictError(
+                message="이미 예매한 회차입니다",
+                error_code="RESERVATION_ALREADY_EXISTS"
+            )
+
+        # 2) 예매 기간 안에만
+        if not (performance.reserv_opens_at <= now < performance.reserv_closes_at):
             raise ReservationConflictError(
                 message="예매 가능한 기간이 아닙니다",
                 error_code="RESERVATION_NOT_OPEN"
@@ -151,7 +158,7 @@ class Reservation:
             ticketholder=ticketholder,
             performance=performance,
             seat=seat,
-            order_number=order_number,
+            order_number=f"ORD-{uuid.uuid4().hex}",  # 주문번호는 엔티티가 직접 생성
             total_amount=seat.reserved_seat_price,
             status=ReservationStatus.PENDING,   # 결제 전이므로 예매대기
         )
@@ -180,7 +187,17 @@ class Reservation:
     def is_owned(self, ticketholder_id: int) -> bool:
         return self.ticketholder.ticketholder_id == ticketholder_id
 
-    # 7) 예매 취소
+    # 7) 예매 조회 (본인 예매만 조회)
+    def check_viewable(self, ticketholder_id:int) -> None :
+
+        # 1) 본인 예매만 조회할 수 있다
+        if not self.is_owned(ticketholder_id) :
+            raise ReservationForbiddenError(
+                message="본인의 예매만 조회할 수 있습니다.",
+                error_code="RESERVATION_FORBIDDEN"
+            )
+
+    # 8) 예매 취소
     def cancel(self, ticketholder_id:int, now: datetime) -> None:
 
         # 1) 본인만 취소할 수 있다
